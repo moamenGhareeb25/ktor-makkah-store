@@ -25,6 +25,12 @@ repositories {
 tasks {
     shadowJar {
         archiveFileName.set("app.jar")
+        mergeServiceFiles()
+        manifest {
+            attributes(
+                "Main-Class" to "io.ktor.server.netty.EngineMain"
+            )
+        }
     }
 }
 dependencies {

@@ -3,34 +3,25 @@ package com.example.firebase
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
-import java.io.ByteArrayInputStream
+import java.io.FileInputStream
 
 object Firebase {
     fun init() {
-        // Read Firebase credentials from environment variables
-        val serviceAccountJson = """
-        {
-            "type": "${System.getenv("FIREBASE_TYPE")}",
-            "project_id": "${System.getenv("FIREBASE_PROJECT_ID")}",
-            "private_key_id": "${System.getenv("FIREBASE_PRIVATE_KEY_ID")}",
-            "private_key": "${System.getenv("FIREBASE_PRIVATE_KEY")}",
-            "client_email": "${System.getenv("FIREBASE_CLIENT_EMAIL")}",
-            "client_id": "${System.getenv("FIREBASE_CLIENT_ID")}",
-            "auth_uri": "${System.getenv("FIREBASE_AUTH_URI")}",
-            "token_uri": "${System.getenv("FIREBASE_TOKEN_URI")}",
-            "auth_provider_x509_cert_url": "${System.getenv("FIREBASE_AUTH_PROVIDER_CERT_URL")}",
-            "client_x509_cert_url": "${System.getenv("FIREBASE_CLIENT_CERT_URL")}"
+        try {
+            // Path to your service account key file
+            val serviceAccountPath = "C:/Users/moame/Downloads/makkah-store-operations-firebase-adminsdk-n1ol9-921f8322d9.json"
+
+            // Initialize Firebase using the credentials file
+            val options = FirebaseOptions.builder()
+                .setCredentials(GoogleCredentials.fromStream(FileInputStream(serviceAccountPath)))
+                .build()
+
+            FirebaseApp.initializeApp(options)
+            println("Firebase initialized successfully!")
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            println("Error initializing Firebase: ${e.message}")
         }
-        """.trimIndent()
-
-        // Convert the JSON string to an InputStream
-        val serviceAccountStream = ByteArrayInputStream(serviceAccountJson.toByteArray())
-
-        // Initialize Firebase
-        val options = FirebaseOptions.builder()
-            .setCredentials(GoogleCredentials.fromStream(serviceAccountStream))
-            .build()
-
-        FirebaseApp.initializeApp(options)
     }
 }
