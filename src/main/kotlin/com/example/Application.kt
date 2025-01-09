@@ -30,4 +30,5 @@ fun Application.module() {
     // Configure Routing
     val profileRepository = ProfileRepository()
     configureRouting(profileRepository)
+
 }

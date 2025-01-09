@@ -22,7 +22,11 @@ repositories {
     mavenCentral()
     google()
 }
-
+tasks {
+    shadowJar {
+        archiveFileName.set("app.jar")
+    }
+}
 dependencies {
     // Ktor
     implementation("io.ktor:ktor-server-core:$ktor_version")
@@ -31,7 +35,6 @@ dependencies {
     implementation("io.ktor:ktor-server-call-logging:$ktor_version")
     implementation("io.ktor:ktor-server-host-common:$ktor_version")
     implementation("io.ktor:ktor-server-status-pages:$ktor_version")
-    implementation("io.ktor:ktor-server-call-logging:$ktor_version")
     implementation("io.ktor:ktor-server-sessions:$ktor_version")
     implementation("io.ktor:ktor-server-cors:$ktor_version")
     implementation("io.ktor:ktor-server-netty:$ktor_version")
@@ -61,7 +64,4 @@ dependencies {
 
     // Firebase Admin SDK
     implementation("com.google.firebase:firebase-admin:9.1.1")
-
-    implementation("com.zaxxer:HikariCP:5.0.1")
-
 }
