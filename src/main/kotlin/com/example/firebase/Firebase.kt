@@ -8,8 +8,9 @@ import java.io.FileInputStream
 object Firebase {
     fun init() {
         try {
-            // Path to your service account key file
-            val serviceAccountPath = "C:/Users/moame/Downloads/makkah-store-operations-firebase-adminsdk-n1ol9-921f8322d9.json"
+            // Read the path from the environment variable
+            val serviceAccountPath = System.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
+                ?: throw IllegalStateException("FIREBASE_SERVICE_ACCOUNT_PATH not set")
 
             // Initialize Firebase using the credentials file
             val options = FirebaseOptions.builder()
@@ -18,7 +19,6 @@ object Firebase {
 
             FirebaseApp.initializeApp(options)
             println("Firebase initialized successfully!")
-
         } catch (e: Exception) {
             e.printStackTrace()
             println("Error initializing Firebase: ${e.message}")

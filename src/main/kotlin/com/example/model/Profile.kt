@@ -10,4 +10,10 @@ data class Profile(
     val personalNumber: String?,
     val workNumber: String?,
     val profilePictureUrl: String?
-)
+) {
+    init {
+        require(userId.isNotBlank()) { "User ID must not be blank" }
+        require(name.isNotBlank()) { "Name must not be blank" }
+        require(email.isNotBlank()) { "Email must not be blank" }
+    }
+}
