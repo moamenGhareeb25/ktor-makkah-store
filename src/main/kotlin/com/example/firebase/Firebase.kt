@@ -3,16 +3,22 @@ package com.example.firebase
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
+import io.github.cdimascio.dotenv.dotenv
 import java.io.FileInputStream
 
 object Firebase {
     fun init() {
+        val env = dotenv {
+            directory = "./"
+            filename = ".env"
+        }
+        println("Loaded .env file: ${env.entries()}")
         try {
-            // Read the path from the environment variable
-            val serviceAccountPath = System.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
+            val serviceAccountPath = env["FIREBASE_SERVICE_ACCOUNT_PATH"]
                 ?: throw IllegalStateException("FIREBASE_SERVICE_ACCOUNT_PATH not set")
 
-            // Initialize Firebase using the credentials file
+            println("Firebase service account path: $serviceAccountPath")
+
             val options = FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(FileInputStream(serviceAccountPath)))
                 .build()

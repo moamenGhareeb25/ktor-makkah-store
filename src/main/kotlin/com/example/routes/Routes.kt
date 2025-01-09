@@ -11,6 +11,12 @@ import io.ktor.server.routing.*
 
 fun Application.configureRouting(profileRepository: ProfileRepository) {
     routing {
+        // Root route
+        get("/") {
+            call.respondText("Welcome to the Ktor application!", ContentType.Text.Plain)
+        }
+
+        // Profile routes
         route("/profile") {
             get {
                 val idToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")
@@ -33,23 +39,30 @@ fun Application.configureRouting(profileRepository: ProfileRepository) {
             }
 
             post {
-                val idToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")
-                if (idToken != null) {
-                    val decodedToken = FirebaseAuth.verifyIdToken(idToken)
-                    if (decodedToken != null) {
-                        val userId = decodedToken.uid
-                        val profile = call.receive<Profile>()
-                        if (profile.userId == userId) {
-                            profileRepository.createProfile(profile)
-                            call.respond(HttpStatusCode.Created, "Profile created")
+                try {
+                    val idToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")
+                    if (idToken != null) {
+                        println("Received ID token: $idToken")
+                        val decodedToken = FirebaseAuth.verifyIdToken(idToken)
+                        if (decodedToken != null) {
+                            val userId = decodedToken.uid
+                            println("User ID: $userId")
+                            val profile = call.receive<Profile>()
+                            if (profile.userId == userId) {
+                                profileRepository.createProfile(profile)
+                                call.respond(HttpStatusCode.Created, "Profile created")
+                            } else {
+                                call.respond(HttpStatusCode.BadRequest, "User ID mismatch")
+                            }
                         } else {
-                            call.respond(HttpStatusCode.BadRequest, "User ID mismatch")
+                            call.respond(HttpStatusCode.Unauthorized, "Invalid token")
                         }
                     } else {
-                        call.respond(HttpStatusCode.Unauthorized, "Invalid token")
+                        call.respond(HttpStatusCode.Unauthorized, "Missing token")
                     }
-                } else {
-                    call.respond(HttpStatusCode.Unauthorized, "Missing token")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    call.respond(HttpStatusCode.InternalServerError, "Internal server error: ${e.message}")
                 }
             }
 
@@ -73,6 +86,7 @@ fun Application.configureRouting(profileRepository: ProfileRepository) {
                     call.respond(HttpStatusCode.Unauthorized, "Missing token")
                 }
             }
+
             delete {
                 val idToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")
                 if (idToken != null) {

@@ -15,6 +15,8 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
+    println("Starting Ktor application...")
+
     // Initialize Firebase
     Firebase.init()
 
@@ -31,4 +33,5 @@ fun Application.module() {
     val profileRepository = ProfileRepository()
     configureRouting(profileRepository)
 
+    println("Ktor application started successfully!")
 }
