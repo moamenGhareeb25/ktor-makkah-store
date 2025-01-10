@@ -1,45 +1,34 @@
-# Use OpenJDK 17 as the base image
+# Builder Stage: Use OpenJDK 17 as the base image for building the application
 FROM openjdk:17-jdk-slim as builder
 
 # Set the working directory
 WORKDIR /app
 
-# Copy the build files
-COPY build.gradle.kts .
-COPY settings.gradle.kts .
+# Copy Gradle wrapper and build files
+COPY gradlew ./
+COPY gradle ./gradle
+COPY build.gradle.kts settings.gradle.kts ./
+
+# Copy the source code
 COPY src ./src
 
-# Build the application
-RUN ./gradlew shadowJar
+# Grant execute permissions to the Gradle wrapper
+RUN chmod +x ./gradlew
 
-# Final stage
+# Build the application with the shadowJar task
+RUN ./gradlew shadowJar --no-daemon
+
+# Final Stage: Use OpenJDK 17 as the base image for running the application
 FROM openjdk:17-jdk-slim
 
 # Set the working directory
 WORKDIR /app
 
 # Copy the JAR file from the builder stage
-COPY --from=builder /app/build/libs/app.jar .
+COPY --from=builder /app/build/libs/*.jar app.jar
 
 # Expose the application port
 EXPOSE 8080
 
 # Run the application
 CMD ["java", "-jar", "app.jar"]
-services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ktor_app
-    ports:
-      - "8080:8080"
-    environment:
-      DATABASE_URL: jdbc:postgresql://db:5432/ktor_dkwc
-      DATABASE_USER: ktor_dkwc_user
-      DATABASE_PASSWORD: xPnzorWy9NzjuPeSYSOFOh7fsiSQ9q7f
-      FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-key.json
-    volumes:
-      - ./firebase-key.json:/app/firebase-key.json
-    depends_on:
-      - db

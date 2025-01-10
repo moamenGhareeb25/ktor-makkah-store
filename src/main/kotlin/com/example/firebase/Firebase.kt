@@ -23,8 +23,13 @@ object Firebase {
                 .setCredentials(GoogleCredentials.fromStream(FileInputStream(serviceAccountPath)))
                 .build()
 
-            FirebaseApp.initializeApp(options)
-            println("Firebase initialized successfully!")
+            // Initialize FirebaseApp only if no app is initialized
+            if (FirebaseApp.getApps().isEmpty()) {
+                FirebaseApp.initializeApp(options)
+                println("Firebase initialized successfully!")
+            } else {
+                println("Firebase already initialized.")
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             println("Error initializing Firebase: ${e.message}")
