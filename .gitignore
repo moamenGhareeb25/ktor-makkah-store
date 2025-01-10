@@ -33,4 +33,4 @@ out/
 /.nb-gradle/
 
 ### VS Code ###
-.vscode/
+.vscode/firebase-key.json
