@@ -36,3 +36,6 @@ out/
 .vscode/firebase-key.json
 
 firebase-key.json
+
+# Ignore .env file
+.env

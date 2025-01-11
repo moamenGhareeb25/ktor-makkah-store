@@ -1,23 +1,31 @@
 package com.example.database
 
+import io.github.cdimascio.dotenv.dotenv
 import org.jetbrains.exposed.sql.Database
 
 object DatabaseFactory {
     fun init() {
         try {
-            val databaseUrl = System.getenv("DATABASE_URL")
-                ?: "postgresql://ktor_dkwc_user:xPnzorWy9NzjuPeSYSOFOh7fsiSQ9q7f@dpg-ctvj1qdds78s73em9e1g-a.oregon-postgres.render.com/ktor_dkwc"
-            val databaseUser = System.getenv("DATABASE_USER") ?: "ktor_dkwc_user"
-            val databasePassword = System.getenv("DATABASE_PASSWORD") ?: "xPnzorWy9NzjuPeSYSOFOh7fsiSQ9q7f"
+            val env = dotenv {
+                directory = "./"
+                filename = ".env"
+            }
 
-            println("Database URL: $databaseUrl")
-            println("Database User: $databaseUser")
+            val databaseUrl = env["DATABASE_URL"]
+                ?: throw IllegalStateException("DATABASE_URL not set")
+            val databaseUser = env["DATABASE_USER"]
+                ?: throw IllegalStateException("DATABASE_USER not set")
+            val databasePassword = env["DATABASE_PASSWORD"]
+                ?: throw IllegalStateException("DATABASE_PASSWORD not set")
+
+            println("Database URL: [REDACTED]") // Avoid logging sensitive data
+            println("Database User: [REDACTED]")
 
             Database.connect(
                 url = databaseUrl,
                 user = databaseUser,
                 password = databasePassword,
-                driver = "org.postgresql.Driver" // Ensure the driver is specified
+                driver = "org.postgresql.Driver"
             )
             println("Database initialized successfully!")
         } catch (e: Exception) {
