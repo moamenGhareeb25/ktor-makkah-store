@@ -15,6 +15,9 @@ fun Application.configureRouting(profileRepository: ProfileRepository) {
         get("/") {
             call.respondText("Welcome to the Ktor application!", ContentType.Text.Plain)
         }
+        head("/") {
+            call.respond(HttpStatusCode.OK)
+        }
 
         // Profile routes
         route("/profile") {
