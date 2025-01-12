@@ -18,6 +18,7 @@ object Firebase {
             // Initialize Firebase
             val options = FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                .setStorageBucket("your-bucket-name.appspot.com")
                 .build()
 
             if (FirebaseApp.getApps().isEmpty()) {
@@ -32,3 +33,4 @@ object Firebase {
         }
     }
 }
+

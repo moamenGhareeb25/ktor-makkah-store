@@ -71,4 +71,9 @@ dependencies {
 
     implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
 
+    // Socket.IO
+    implementation("io.socket:socket.io-client:2.1.0")
+    implementation("io.ktor:ktor-server-websockets:$ktor_version")
+
+
 }

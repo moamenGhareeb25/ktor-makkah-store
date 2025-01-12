@@ -1,22 +1,33 @@
 package com.example.routes
 
 import com.example.auth.FirebaseAuth
+import com.example.firebase.FirebaseStorageService
+import com.example.model.CreateChatRequest
+import com.example.model.CreateGroupChatRequest
+import com.example.model.Message
 import com.example.model.Profile
+import com.example.repository.ChatRepository
 import com.example.repository.ProfileRepository
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import java.io.File
 
-fun Application.configureRouting(profileRepository: ProfileRepository) {
+fun Application.configureRouting(chatRepository: ChatRepository, profileRepository: ProfileRepository) {
+
     routing {
         // Root route
         get("/") {
             call.respondText("Welcome to the Ktor application!", ContentType.Text.Plain)
         }
-        head("/") {
-            call.respond(HttpStatusCode.OK)
+
+        route("/main") {
+            get("/users") {
+                val users = profileRepository.getAllUsers()
+                call.respond(HttpStatusCode.OK, users)
+            }
         }
 
         // Profile routes
@@ -45,11 +56,9 @@ fun Application.configureRouting(profileRepository: ProfileRepository) {
                 try {
                     val idToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")
                     if (idToken != null) {
-                        println("Received ID token: $idToken")
                         val decodedToken = FirebaseAuth.verifyIdToken(idToken)
                         if (decodedToken != null) {
                             val userId = decodedToken.uid
-                            println("User ID: $userId")
                             val profile = call.receive<Profile>()
                             if (profile.userId == userId) {
                                 profileRepository.createProfile(profile)
@@ -64,7 +73,6 @@ fun Application.configureRouting(profileRepository: ProfileRepository) {
                         call.respond(HttpStatusCode.Unauthorized, "Missing token")
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
                     call.respond(HttpStatusCode.InternalServerError, "Internal server error: ${e.message}")
                 }
             }
@@ -105,6 +113,7 @@ fun Application.configureRouting(profileRepository: ProfileRepository) {
                     call.respond(HttpStatusCode.Unauthorized, "Missing token")
                 }
             }
+
             get("/check") {
                 val idToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")
                 if (idToken != null) {
@@ -114,10 +123,8 @@ fun Application.configureRouting(profileRepository: ProfileRepository) {
                         val profile = profileRepository.getProfile(userId)
 
                         if (profile != null) {
-                            // User exists, return the profile
                             call.respond(profile)
                         } else {
-                            // User doesn't exist, create a new profile
                             val newProfile = Profile(
                                 userId = userId,
                                 name = decodedToken.name ?: "Unknown",
@@ -136,6 +143,80 @@ fun Application.configureRouting(profileRepository: ProfileRepository) {
                 } else {
                     call.respond(HttpStatusCode.Unauthorized, "Missing token")
                 }
+            }
+
+            get("/{userId}/status") {
+                val userId = call.parameters["userId"] ?: return@get call.respond(HttpStatusCode.BadRequest, "User ID required")
+                val (isOnline, lastSeen) = profileRepository.getUserStatus(userId)
+                call.respond(HttpStatusCode.OK, mapOf("isOnline" to isOnline, "lastSeen" to lastSeen))
+            }
+        }
+
+        route("/chats") {
+            post("/private") {
+                val request = call.receive<CreateChatRequest>()
+                val chat = chatRepository.createPrivateChat(request.participants[0], request.participants[1])
+                call.respond(HttpStatusCode.Created, chat)
+            }
+
+            post("/group") {
+                val request = call.receive<CreateGroupChatRequest>()
+                val chat = chatRepository.createGroupChat(request.adminId, request.groupName, request.participants)
+                call.respond(HttpStatusCode.Created, chat)
+            }
+
+            post("/{chatId}/message") {
+                val chatId = call.parameters["chatId"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Chat ID required")
+                val message = call.receive<Message>()
+
+                if (message.contentType == "file") {
+                    val file = File(message.content)
+                    val fileUrl = FirebaseStorageService.uploadFile(file, "application/octet-stream")
+                    if (fileUrl != null) {
+                        val updatedMessage = message.copy(content = fileUrl)
+                        val messageId = chatRepository.storeMessage(chatId, updatedMessage.senderId, updatedMessage)
+                        chatRepository.notifyParticipants(chatId, updatedMessage, updatedMessage.senderId)
+                        call.respond(HttpStatusCode.Created, mapOf("messageId" to messageId))
+                    } else {
+                        call.respond(HttpStatusCode.InternalServerError, "Failed to upload file")
+                    }
+                } else {
+                    val messageId = chatRepository.storeMessage(chatId, message.senderId, message)
+                    chatRepository.notifyParticipants(chatId, message, message.senderId)
+                    call.respond(HttpStatusCode.Created, mapOf("messageId" to messageId))
+                }
+            }
+
+            get {
+                val userId = call.request.queryParameters["userId"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+                val chats = chatRepository.getActiveChats(userId)
+                call.respond(HttpStatusCode.OK, chats)
+            }
+
+            get("/details") {
+                val userId = call.parameters["userId"] ?: return@get call.respond(HttpStatusCode.BadRequest, "User ID required")
+                val chatDetails = chatRepository.getChatsWithDetails(userId)
+                call.respond(HttpStatusCode.OK, chatDetails)
+            }
+        }
+
+        route("/status") {
+            post {
+                val userId = call.parameters["userId"] ?: return@post call.respond(HttpStatusCode.BadRequest, "User ID required")
+                val online = call.parameters["online"]?.toBoolean() ?: false
+                profileRepository.updateAndBroadcastStatus(userId, online)
+                call.respond(HttpStatusCode.OK, "Status updated")
+            }
+        }
+
+        post("/device-token") {
+            val userId = call.parameters["userId"]
+            val token = call.parameters["token"]
+            if (userId != null && token != null) {
+                profileRepository.saveDeviceToken(userId, token)
+                call.respond(HttpStatusCode.OK, "Device token saved")
+            } else {
+                call.respond(HttpStatusCode.BadRequest, "User ID and token required")
             }
         }
     }

@@ -1,5 +1,6 @@
-package com.example.database
+package com.example.dataFactory
 
+import com.example.database.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -21,9 +22,15 @@ object DatabaseFactory {
                 driver = "org.postgresql.Driver"
             )
 
-            // Create the profiles table if it doesn't exist
+            // Create all tables
             transaction {
-                SchemaUtils.create(ProfileTable)
+                SchemaUtils.create(
+                    ProfileTable,
+                    Chats,
+                    ChatParticipants,
+                    Messages,
+                    DeviceTokens
+                )
             }
 
             println("Database initialized successfully!")

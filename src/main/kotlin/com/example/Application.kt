@@ -1,17 +1,21 @@
+// Refactored and improved backend code for your chat application.
+
 package com.example
 
-import com.example.database.DatabaseFactory
+import com.example.dataFactory.DatabaseFactory
 import com.example.firebase.Firebase
-import com.example.plugins.configureHTTP
-import com.example.plugins.configureMonitoring
-import com.example.plugins.configureSecurity
-import com.example.plugins.configureSerialization
+import com.example.plugins.*
+import com.example.repository.ChatRepository
 import com.example.repository.ProfileRepository
 import com.example.routes.configureRouting
 import io.ktor.server.application.*
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
 
-fun main(args: Array<String>) {
-    io.ktor.server.netty.EngineMain.main(args)
+fun main() {
+    embeddedServer(Netty, port = System.getenv("PORT")?.toInt() ?: 8080) {
+        module()
+    }.start(wait = true)
 }
 
 fun Application.module() {
@@ -19,7 +23,7 @@ fun Application.module() {
 
     // Initialize Firebase
     Firebase.init()
-//
+
     // Initialize Database
     DatabaseFactory.init()
 
@@ -29,9 +33,13 @@ fun Application.module() {
     configureSecurity()
     configureHTTP()
 
-    // Configure Routing
+    // Configure Routes
     val profileRepository = ProfileRepository()
-    configureRouting(profileRepository)
+    val chatRepository = ChatRepository(profileRepository)
+    configureRouting(chatRepository, profileRepository)
+
+    configureSocketIO(chatRepository)
+
 
     println("Ktor application started successfully!")
 }
