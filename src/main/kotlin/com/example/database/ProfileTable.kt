@@ -10,6 +10,7 @@ object ProfileTable : Table("profiles") {
     val personalNumber = varchar("personal_number", 20).nullable()
     val workNumber = varchar("work_number", 20).nullable()
     val profilePictureUrl = varchar("profile_picture_url", 200).nullable()
+    val createdAt = long("created_at").nullable()
 
     override val primaryKey = PrimaryKey(userId)
 }

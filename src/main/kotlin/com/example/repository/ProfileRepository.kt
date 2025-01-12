@@ -47,6 +47,7 @@ class ProfileRepository {
                 it[personalNumber] = profile.personalNumber
                 it[workNumber] = profile.workNumber
                 it[profilePictureUrl] = profile.profilePictureUrl
+                it[createdAt] = profile.createdAt ?: System.currentTimeMillis()
             }
         }
     }

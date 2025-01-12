@@ -105,6 +105,38 @@ fun Application.configureRouting(profileRepository: ProfileRepository) {
                     call.respond(HttpStatusCode.Unauthorized, "Missing token")
                 }
             }
+            get("/check") {
+                val idToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")
+                if (idToken != null) {
+                    val decodedToken = FirebaseAuth.verifyIdToken(idToken)
+                    if (decodedToken != null) {
+                        val userId = decodedToken.uid
+                        val profile = profileRepository.getProfile(userId)
+
+                        if (profile != null) {
+                            // User exists, return the profile
+                            call.respond(profile)
+                        } else {
+                            // User doesn't exist, create a new profile
+                            val newProfile = Profile(
+                                userId = userId,
+                                name = decodedToken.name ?: "Unknown",
+                                email = decodedToken.email ?: "No email",
+                                personalNumber = null,
+                                workNumber = null,
+                                profilePictureUrl = null,
+                                createdAt = System.currentTimeMillis()
+                            )
+                            profileRepository.createProfile(newProfile)
+                            call.respond(HttpStatusCode.Created, newProfile)
+                        }
+                    } else {
+                        call.respond(HttpStatusCode.Unauthorized, "Invalid token")
+                    }
+                } else {
+                    call.respond(HttpStatusCode.Unauthorized, "Missing token")
+                }
+            }
         }
     }
 }

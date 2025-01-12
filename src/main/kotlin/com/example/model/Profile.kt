@@ -9,7 +9,8 @@ data class Profile(
     val email: String,
     val personalNumber: String?,
     val workNumber: String?,
-    val profilePictureUrl: String?
+    val profilePictureUrl: String?,
+    val createdAt: Long? = null
 ) {
     init {
         require(userId.isNotBlank()) { "User ID must not be blank" }
