@@ -152,12 +152,26 @@ fun Application.configureRouting(chatRepository: ChatRepository, profileReposito
             }
         }
 
-        route("/chats") {
-            post("/private") {
+        post("/private") {
+            try {
+                // Deserialize the incoming JSON into CreateChatRequest
                 val request = call.receive<CreateChatRequest>()
+
+                // Validate participants
+                if (request.participants.size < 2) {
+                    call.respond(HttpStatusCode.BadRequest, "At least two participants are required.")
+                    return@post
+                }
+                // Create the private chat
                 val chat = chatRepository.createPrivateChat(request.participants[0], request.participants[1])
+
+                // Respond with the created chat
                 call.respond(HttpStatusCode.Created, chat)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.BadRequest, "Invalid request payload: ${e.message}")
             }
+        }
 
             post("/group") {
                 val request = call.receive<CreateGroupChatRequest>()
@@ -198,7 +212,6 @@ fun Application.configureRouting(chatRepository: ChatRepository, profileReposito
                 val chatDetails = chatRepository.getChatsWithDetails(userId)
                 call.respond(HttpStatusCode.OK, chatDetails)
             }
-        }
 
         route("/status") {
             post {
