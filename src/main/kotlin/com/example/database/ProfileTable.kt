@@ -13,6 +13,8 @@ object ProfileTable : Table("profiles") {
     val createdAt = long("created_at").nullable()
     val isOnline = bool("is_online").default(false)
     val lastSeen = long("last_seen").nullable()
+    val userRole = varchar("user_rule", 20).nullable()
+
 
     override val primaryKey = PrimaryKey(userId)
 }

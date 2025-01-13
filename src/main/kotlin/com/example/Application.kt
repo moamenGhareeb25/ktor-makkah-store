@@ -7,6 +7,7 @@ import com.example.firebase.Firebase
 import com.example.plugins.*
 import com.example.repository.ChatRepository
 import com.example.repository.ProfileRepository
+import com.example.repository.TaskRepository
 import com.example.routes.configureRouting
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -36,9 +37,11 @@ fun Application.module() {
     // Configure Routes
     val profileRepository = ProfileRepository()
     val chatRepository = ChatRepository(profileRepository)
-    configureRouting(chatRepository, profileRepository)
+    val taskRepository = TaskRepository()
+    configureRouting(chatRepository, profileRepository , taskRepository )
 
     configureSocketIO(chatRepository)
+
 
 
     println("Ktor application started successfully!")

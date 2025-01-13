@@ -29,7 +29,8 @@ object DatabaseFactory {
                     Chats,
                     ChatParticipants,
                     Messages,
-                    DeviceTokens
+                    DeviceTokens,
+                    Tasks
                 )
             }
 
