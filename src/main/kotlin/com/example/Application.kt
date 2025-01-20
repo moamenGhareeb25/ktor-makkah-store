@@ -40,7 +40,7 @@ fun Application.module() {
     val taskRepository = TaskRepository()
     configureRouting(chatRepository, profileRepository , taskRepository )
 
-    configureSocketIO(chatRepository)
+    configureSocketIO(chatRepository,profileRepository)
 
 
 
