@@ -4,20 +4,24 @@ import com.example.firebase.FirebaseStorageService
 import com.example.model.Message
 import com.example.model.TypingIndicator
 import com.example.repository.ChatRepository
+import com.example.repository.ProfileRepository
+import com.example.repository.WebSocketManager
 import io.ktor.server.application.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 
 val activeConnections = ConcurrentHashMap<String, MutableSet<DefaultWebSocketSession>>()
 
-fun Application.configureSocketIO(chatRepository: ChatRepository) {
+
+fun Application.configureSocketIO(chatRepository: ChatRepository, profileRepository: ProfileRepository) {
+    val webSocketManager = WebSocketManager(profileRepository)
+
     install(WebSockets)
 
     routing {
@@ -28,7 +32,8 @@ fun Application.configureSocketIO(chatRepository: ChatRepository) {
                 return@webSocket
             }
 
-            activeConnections.computeIfAbsent(userId) { mutableSetOf() }.add(this)
+            // Add the user to WebSocketManager
+            webSocketManager.addConnection(userId, this)
 
             try {
                 incoming.consumeEach { frame ->
@@ -38,42 +43,30 @@ fun Application.configureSocketIO(chatRepository: ChatRepository) {
 
                         val eventType = parsedMessage["eventType"]?.jsonPrimitive?.content
                         val chatId = parsedMessage["chatId"]?.jsonPrimitive?.content
-                        val contentType = parsedMessage["contentType"]?.jsonPrimitive?.content
-                        val content = parsedMessage["content"]?.jsonPrimitive?.content
 
                         when (eventType) {
                             "message" -> {
-                                if (chatId != null && contentType != null && content != null) {
-                                    val message = Message(
-                                        senderId = userId,
-                                        contentType = contentType,
-                                        content = handleContent(contentType, content)
-                                    )
-                                    broadcastMessage(chatId, message, userId)
-                                    chatRepository.storeMessage(chatId, userId, message)
-                                    chatRepository.notifyParticipants(chatId, message, userId)
-                                }
-                            }
-                            "typing" -> {
                                 if (chatId != null) {
-                                    val isTyping = parsedMessage["isTyping"]?.jsonPrimitive?.boolean ?: false
-                                    broadcastTypingIndicator(chatId, userId, isTyping)
+                                    val message = parsedMessage["content"]?.jsonPrimitive?.content ?: return@consumeEach
+                                    webSocketManager.broadcastMessageToChat(
+                                        participants = chatRepository.getChatParticipants(chatId),
+                                        message = message,
+                                        senderId = userId
+                                    )
                                 }
                             }
                         }
                     }
                 }
             } finally {
-                activeConnections[userId]?.remove(this)
-                if (activeConnections[userId]?.isEmpty() == true) {
-                    activeConnections.remove(userId)
-                }
+                // Remove the user from WebSocketManager on disconnect
+                webSocketManager.removeConnection(userId, this)
             }
         }
     }
 }
 
-fun handleContent(contentType: String, content: String): String {
+        fun handleContent(contentType: String, content: String): String {
     return if (contentType == "file") {
         val file = java.io.File(content)
         FirebaseStorageService.uploadFile(file, "application/octet-stream") ?: throw Exception("Failed to upload file")

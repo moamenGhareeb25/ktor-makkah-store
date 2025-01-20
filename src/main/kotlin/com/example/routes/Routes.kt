@@ -35,12 +35,13 @@ private fun Route.rootRoutes() {
 
 private fun Route.profileRoutes(profileRepository: ProfileRepository) {
     route("/profile") {
+
         // Get profile by ID token
         get {
-            val userId = call.validateAndExtractUserId() ?: return@get
+            val userId = call.validateAndExtractUserId() ?: return@get call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
             val profile = profileRepository.getProfile(userId)
             if (profile != null) {
-                call.respond(profile)
+                call.respond(HttpStatusCode.OK, profile)
             } else {
                 call.respond(HttpStatusCode.NotFound, "Profile not found")
             }
@@ -48,42 +49,48 @@ private fun Route.profileRoutes(profileRepository: ProfileRepository) {
 
         // Create a new profile
         post {
-            val userId = call.validateAndExtractUserId() ?: return@post
+            val userId = call.validateAndExtractUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
             val profile = call.receive<Profile>()
+
+            // Ensure the profile being created matches the authenticated user
             if (profile.userId != userId) {
                 call.respond(HttpStatusCode.BadRequest, "User ID mismatch")
                 return@post
             }
-            profileRepository.createProfile(profile)
+
+            profileRepository.createProfile(profile, requesterId = userId)
             call.respond(HttpStatusCode.Created, "Profile created")
         }
 
         // Update an existing profile
         put {
-            val userId = call.validateAndExtractUserId() ?: return@put
+            val userId = call.validateAndExtractUserId() ?: return@put call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
             val updatedProfile = call.receive<Profile>()
+
+            // Ensure the profile being updated matches the authenticated user
             if (updatedProfile.userId != userId) {
                 call.respond(HttpStatusCode.BadRequest, "User ID mismatch")
                 return@put
             }
-            profileRepository.updateProfile(updatedProfile)
+
+            profileRepository.updateProfile(updatedProfile, requesterId = userId)
             call.respond(HttpStatusCode.OK, "Profile updated")
         }
 
         // Delete a profile
         delete {
-            val userId = call.validateAndExtractUserId() ?: return@delete
+            val userId = call.validateAndExtractUserId() ?: return@delete call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
             profileRepository.deleteProfile(userId)
             call.respond(HttpStatusCode.OK, "Profile deleted")
         }
 
-        // Check if a profile exists, create if not
+        // Check if a profile exists; create if not
         get("/check") {
-            val userId = call.validateAndExtractUserId() ?: return@get
+            val userId = call.validateAndExtractUserId() ?: return@get call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
             val profile = profileRepository.getProfile(userId)
 
             if (profile != null) {
-                call.respond(profile)
+                call.respond(HttpStatusCode.OK, profile)
             } else {
                 val newProfile = Profile(
                     userId = userId,
@@ -93,9 +100,13 @@ private fun Route.profileRoutes(profileRepository: ProfileRepository) {
                     workNumber = null,
                     profilePictureUrl = null,
                     userRule = null,
-                    createdAt = System.currentTimeMillis()
+                    createdAt = System.currentTimeMillis(),
+                    nickname = null,
+                    isOnline = false,
+                    lastSeen = null,
+                    pendingUpdates = mutableMapOf()
                 )
-                profileRepository.createProfile(newProfile)
+                profileRepository.createProfile(newProfile, requesterId = userId)
                 call.respond(HttpStatusCode.Created, newProfile)
             }
         }
@@ -103,7 +114,7 @@ private fun Route.profileRoutes(profileRepository: ProfileRepository) {
         // Get user online status
         get("/{userId}/status") {
             val userId = call.parameters["userId"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, "User ID required")
+                ?: return@get call.respond(HttpStatusCode.BadRequest, "User ID is required")
             val (isOnline, lastSeen) = profileRepository.getUserStatus(userId)
             call.respond(HttpStatusCode.OK, mapOf("isOnline" to isOnline, "lastSeen" to lastSeen))
         }
@@ -111,16 +122,17 @@ private fun Route.profileRoutes(profileRepository: ProfileRepository) {
         // Handle profile update decisions
         put("/{profileId}/decision") {
             val profileId = call.parameters["profileId"]
-                ?: return@put call.respond(HttpStatusCode.BadRequest, "Profile ID required")
+                ?: return@put call.respond(HttpStatusCode.BadRequest, "Profile ID is required")
             val decision = call.request.queryParameters["decision"]
-                ?: return@put call.respond(HttpStatusCode.BadRequest, "Decision required")
+                ?: return@put call.respond(HttpStatusCode.BadRequest, "Decision is required")
 
-            val modifiedProfile = if (decision == "MODIFY") call.receive<Profile>() else null
-            profileRepository.handleProfileUpdateDecision(profileId, decision, modifiedProfile)
+            val modifiedProfile = if (decision.uppercase() == "MODIFY") call.receiveOrNull<Profile>() else null
+            profileRepository.reviewPendingUpdates(profileId, decision, call.validateAndExtractUserId() ?: "")
             call.respond(HttpStatusCode.OK, "Profile update decision applied")
         }
     }
 }
+
 
 private fun Route.chatRoutes(chatRepository: ChatRepository) {
     route("/chat") {
