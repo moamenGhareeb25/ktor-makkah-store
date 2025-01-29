@@ -38,7 +38,8 @@ fun Application.configureWebSockets(chatRepository: ChatRepository, profileRepos
 
                         when (eventType) {
                             "message" -> {
-                                val messageContent = parsedMessage["content"]?.jsonPrimitive?.content ?: return@consumeEach
+                                val messageContent =
+                                    parsedMessage["content"]?.jsonPrimitive?.content ?: return@consumeEach
                                 if (chatId != null) {
                                     WebSocketManager.broadcastMessage(
                                         chatRepository.getChatParticipants(chatId),
@@ -47,6 +48,7 @@ fun Application.configureWebSockets(chatRepository: ChatRepository, profileRepos
                                     )
                                 }
                             }
+
                             "disconnect" -> {
                                 WebSocketManager.removeConnection(userId, this) { id, status ->
                                     userStatusService.updateUserStatus(id, status)
@@ -62,27 +64,43 @@ fun Application.configureWebSockets(chatRepository: ChatRepository, profileRepos
                 }
             }
         }
-        webSocket("/ws") {
-            val userId = call.parameters["userId"]
-            if (userId == null) {
-                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "User ID is required"))
-                return@webSocket
-            }
+            webSocket("/ws") {
+                val userId = call.parameters["userId"]
+                    ?: return@webSocket close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "User ID is required"))
 
-            // Add user to WebSocket connections
-            webSocketService.addConnection(userId, this)
+                webSocketService.addConnection(userId, this)
 
-            try {
-                incoming.consumeEach { frame ->
-                    if (frame is Frame.Text) {
-                        val message = frame.readText()
-                        println("Received message: $message")
+                try {
+                    incoming.consumeEach { frame ->
+                        if (frame is Frame.Text) {
+                            val receivedText = frame.readText()
+                            val parsedMessage = Json.parseToJsonElement(receivedText).jsonObject
+
+                            when (parsedMessage["eventType"]?.jsonPrimitive?.content) {
+                                "message" -> {
+                                    val chatId = parsedMessage["chatId"]?.jsonPrimitive?.content
+                                    val messageContent = parsedMessage["content"]?.jsonPrimitive?.content
+
+                                    if (chatId != null && messageContent != null) {
+                                        webSocketService.broadcastMessage(
+                                            chatRepository.getChatParticipants(chatId),
+                                            messageContent,
+                                            userId
+                                        )
+                                    }
+                                }
+
+                                "disconnect" -> {
+                                    webSocketService.removeConnection(userId, this)
+                                    close(CloseReason(CloseReason.Codes.NORMAL, "User disconnected"))
+                                }
+                            }
+                        }
                     }
+                } finally {
+                    webSocketService.removeConnection(userId, this)
                 }
-            } finally {
-                // Remove user from WebSocket connections
-                webSocketService.removeConnection(userId, this)
             }
         }
     }
-}
+
