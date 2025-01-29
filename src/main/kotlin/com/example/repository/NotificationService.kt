@@ -5,31 +5,26 @@ import com.example.auth.sendNotification
 class NotificationService(private val profileRepository: ProfileRepository) {
 
     /**
-     * Notify a specific user.
+     * Send a notification to a specific user.
      */
     fun notifyUser(title: String, message: String, recipientId: String, data: Map<String, String> = emptyMap()) {
-        val deviceToken = getDeviceToken(recipientId)
-        if (deviceToken != null) {
-            sendNotification(deviceToken, title, message)
-        }
-    }
-
-
-    /**
-     * Notify the owner or delegated reviewer.
-     */
-    fun notifyOwnerOrReviewer(title: String, message: String, recipientId: String ,data: Map<String, String> = emptyMap()) {
-        val deviceToken = getDeviceToken(recipientId)
-        if (deviceToken != null) {
-            sendNotification(deviceToken, title, message)
-        }
+        sendNotificationToDevice(recipientId, title, message, data)
     }
 
     /**
-     * Helper function to fetch the device token from the database.
+     * Notify the owner or delegated reviewer about an event.
      */
-    private fun getDeviceToken(userId: String): String? {
-        return profileRepository.getDeviceToken(userId)
+    fun notifyOwnerOrReviewer(title: String, message: String, recipientId: String, data: Map<String, String> = emptyMap()) {
+        sendNotificationToDevice(recipientId, title, message, data)
+    }
+
+    /**
+     * Internal function to fetch the device token and send a notification.
+     */
+    private fun sendNotificationToDevice(userId: String, title: String, message: String, data: Map<String, String>) {
+        val deviceToken = profileRepository.getDeviceToken(userId)
+        if (deviceToken != null) {
+            sendNotification(deviceToken, title, message, data) // ✅ Passes `data` properly
+        }
     }
 }
-
