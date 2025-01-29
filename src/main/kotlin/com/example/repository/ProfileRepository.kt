@@ -291,6 +291,15 @@ class ProfileRepository {
                 .firstOrNull() ?: false
         }
     }
+
+    fun getAllUsers(): List<String> {
+        return transaction {
+            ProfileTable.slice(ProfileTable.userId)
+                .selectAll()
+                .map { it[ProfileTable.userId] }
+        }
+    }
+
 }
 
 

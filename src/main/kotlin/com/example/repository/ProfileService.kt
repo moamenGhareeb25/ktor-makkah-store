@@ -29,7 +29,7 @@ class ProfileService(
      * @param profile The profile to be created.
      * @param requesterId The ID of the requester performing the action.
      */
-    fun createProfile(profile: Profile, requesterId: String) {
+    suspend fun createProfile(profile: Profile, requesterId: String) {
         if (!authorizationService.isAuthorizedForProfileAction(requesterId, profile.userId, ActionType.CREATE)) {
             throw IllegalArgumentException("Unauthorized to create this profile.")
         }
@@ -47,7 +47,7 @@ class ProfileService(
      * @param userId The ID of the user whose profile is to be checked.
      * @param ownerId The ID of the owner to be notified.
      */
-    fun checkProfile(userId: String, ownerId: String): Profile? {
+    suspend fun checkProfile(userId: String, ownerId: String): Profile? {
         val profile = profileRepository.getProfile(userId)
         if (profile != null) {
             val pendingUpdates = pendingUpdateService.getPendingUpdates(userId)
@@ -86,7 +86,7 @@ class ProfileService(
      * @param profile The profile with updated information.
      * @param requesterId The ID of the requester performing the update.
      */
-    fun updateProfile(profile: Profile, requesterId: String) {
+    suspend fun updateProfile(profile: Profile, requesterId: String) {
         if (!authorizationService.isAuthorizedForProfileAction(requesterId, profile.userId, ActionType.UPDATE)) {
             pendingUpdateService.savePendingUpdate(profile)
             notificationService.notifyOwnerOrReviewer(
@@ -109,7 +109,7 @@ class ProfileService(
      * @param userId The ID of the user whose profile is to be deleted.
      * @param requesterId The ID of the requester performing the deletion.
      */
-    fun deleteProfile(userId: String, requesterId: String) {
+    suspend fun deleteProfile(userId: String, requesterId: String) {
         if (!authorizationService.isAuthorizedForProfileAction(requesterId, userId, ActionType.DELETE)) {
             throw IllegalArgumentException("Unauthorized to delete this profile.")
         }
@@ -135,7 +135,7 @@ class ProfileService(
      * @param decision The decision ("ACCEPT" or "REJECT").
      * @param reviewerId The ID of the reviewer.
      */
-    fun reviewPendingUpdates(profileId: String, decision: String, reviewerId: String) {
+    suspend fun reviewPendingUpdates(profileId: String, decision: String, reviewerId: String) {
         val pendingUpdates = pendingUpdateService.getPendingUpdates(profileId)
 
         when (decision.uppercase()) {
@@ -170,7 +170,7 @@ class ProfileService(
     /**
      * **Modifies and applies pending updates after review.**
      */
-    fun modifyPendingUpdates(profileId: String, modifiedProfile: Profile, reviewerId: String) {
+    suspend fun modifyPendingUpdates(profileId: String, modifiedProfile: Profile, reviewerId: String) {
         if (!authorizationService.isAuthorizedForProfileAction(reviewerId, profileId, ActionType.UPDATE)) {
             throw IllegalArgumentException("Unauthorized to modify profile updates.")
         }
@@ -189,4 +189,8 @@ class ProfileService(
     fun getPendingProfiles(): List<Profile> {
         return profileRepository.getAllPendingProfiles()
     }
+    fun getAllUsers(): List<String> {
+        return profileRepository.getAllUsers()
+    }
+
 }

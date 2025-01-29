@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.auth.FirebaseNotificationService
 import com.example.dataFactory.DatabaseFactory
 import com.example.firebase.Firebase
 import com.example.plugins.*
@@ -38,9 +39,12 @@ fun Application.module() {
     configureSecurity()
     configureHTTP()
 
+    // ✅ Initialize Firebase Notification Service (as Singleton)
+    val firebaseNotificationService = FirebaseNotificationService()
+
     // ✅ Initialize Repositories
     val profileRepository = ProfileRepository()
-    val chatRepository = ChatRepository(profileRepository)
+    val chatRepository = ChatRepository(profileRepository, firebaseNotificationService)
     val taskRepository = TaskRepository()
     val kpiRepository = KPIRepository()
     val workLogRepository = WorkLogRepository()
@@ -48,12 +52,12 @@ fun Application.module() {
 
     // ✅ Initialize Services
     val authorizationService = AuthorizationService(delegationRepository)
-    val notificationService = NotificationService(profileRepository)
+    val notificationService = NotificationService(profileRepository, firebaseNotificationService)
     val pendingUpdateService = PendingUpdateService(profileRepository)
     val profileService = ProfileService(profileRepository, pendingUpdateService, notificationService, authorizationService)
     val webSocketService = WebSocketService(profileRepository)
 
-    // ✅ Configure Routes
+    // ✅ Configure Routes (Pass Dependencies Properly)
     configureRouting(
         chatRepository,
         profileRepository,
@@ -63,7 +67,8 @@ fun Application.module() {
         delegationRepository,
         profileService,
         notificationService,
-        authorizationService
+        authorizationService,
+        firebaseNotificationService
     )
 
     // ✅ Configure WebSocket Routes (WITHOUT INSTALLING AGAIN)

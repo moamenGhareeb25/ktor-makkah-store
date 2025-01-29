@@ -1,8 +1,7 @@
 package com.example.repository
 
-import com.example.auth.sendNotification
+import com.example.auth.FirebaseNotificationService
 import com.example.database.ChatParticipants
-import com.example.database.ChatParticipants.joinedAt
 import com.example.database.Chats
 import com.example.database.Messages
 import com.example.database.ProfileTable
@@ -12,29 +11,27 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.*
 
-class ChatRepository(private val profileRepository: ProfileRepository) {
+class ChatRepository(
+    private val profileRepository: ProfileRepository,
+    private val firebaseNotificationService: FirebaseNotificationService
+) {
 
     /**
      * Create a private chat between two users.
-     * @param user1 The first user ID.
-     * @param user2 The second user ID.
-     * @return The created Chat object.
      */
     fun createPrivateChat(user1: String, user2: String): Chat {
         val chatId = UUID.randomUUID().toString()
         return transaction {
-            // Insert chat into Chats table
             Chats.insert {
                 it[this.chatId] = chatId
                 it[chatType] = "private"
                 it[createdAt] = System.currentTimeMillis()
             }
 
-            // Insert participants into ChatParticipants table
             ChatParticipants.batchInsert(listOf(user1, user2)) { user ->
                 this[ChatParticipants.chatId] = chatId
                 this[ChatParticipants.userId] = user
-                this[joinedAt] = System.currentTimeMillis()
+                this[ChatParticipants.joinedAt] = System.currentTimeMillis()
             }
 
             Chat(chatId, "private", System.currentTimeMillis())
@@ -42,16 +39,11 @@ class ChatRepository(private val profileRepository: ProfileRepository) {
     }
 
     /**
-     * Create a group chat with an admin and participants.
-     * @param adminId The admin user ID.
-     * @param groupName The name of the group.
-     * @param participants The list of participant user IDs.
-     * @return The created Chat object.
+     * Create a group chat.
      */
     fun createGroupChat(adminId: String, groupName: String, participants: List<String>): Chat {
         val chatId = UUID.randomUUID().toString()
         return transaction {
-            // Insert chat into Chats table
             Chats.insert {
                 it[this.chatId] = chatId
                 it[chatType] = "group"
@@ -59,12 +51,11 @@ class ChatRepository(private val profileRepository: ProfileRepository) {
                 it[Chats.groupName] = groupName
             }
 
-            // Add admin to participants and insert into ChatParticipants table
             val allParticipants = (participants + adminId).distinct()
             ChatParticipants.batchInsert(allParticipants) { user ->
                 this[ChatParticipants.chatId] = chatId
                 this[ChatParticipants.userId] = user
-                this[joinedAt] = System.currentTimeMillis()
+                this[ChatParticipants.joinedAt] = System.currentTimeMillis()
             }
 
             Chat(chatId, "group", System.currentTimeMillis(), groupName)
@@ -72,39 +63,9 @@ class ChatRepository(private val profileRepository: ProfileRepository) {
     }
 
     /**
-     * Check if a user is part of a specific chat.
-     * @param chatId The chat ID.
-     * @param userId The user ID.
-     * @return True if the user is in the chat, false otherwise.
+     * Store a message and notify participants.
      */
-    fun isUserInChat(chatId: String, userId: String): Boolean {
-        return transaction {
-            ChatParticipants.select {
-                ChatParticipants.chatId eq chatId and (ChatParticipants.userId eq userId)
-            }.count() > 0
-        }
-    }
-
-    /**
-     * Get all participants of a chat.
-     * @param chatId The chat ID.
-     * @return A list of participant user IDs.
-     */
-    fun getParticipants(chatId: String): List<String> {
-        return transaction {
-            ChatParticipants.select { ChatParticipants.chatId eq chatId }
-                .map { it[ChatParticipants.userId] }
-        }
-    }
-
-    /**
-     * Store a message in the database.
-     * @param chatId The chat ID.
-     * @param senderId The sender's user ID.
-     * @param message The message object.
-     * @return The generated message ID.
-     */
-    fun storeMessage(chatId: String, senderId: String, message: Message): String {
+    suspend fun storeMessage(chatId: String, senderId: String, message: Message): String {
         val messageId = UUID.randomUUID().toString()
         transaction {
             Messages.insert {
@@ -116,50 +77,44 @@ class ChatRepository(private val profileRepository: ProfileRepository) {
                 it[this.createdAt] = System.currentTimeMillis()
             }
         }
+        notifyParticipants(chatId, message, senderId)
         return messageId
     }
 
     /**
-     * Mark a message as read by a user.
-     * @param messageId The message ID.
-     * @param userId The user ID.
-     * @return True if the message was marked as read, false otherwise.
+     * Notify participants of a chat about a new message.
      */
-    fun markMessageAsRead(messageId: String, userId: String): Boolean {
-        return transaction {
-            Messages.update({ Messages.messageId eq messageId }) {
-                it[isRead] = true
-                it[readAt] = System.currentTimeMillis()
-            } > 0
+    suspend fun notifyParticipants(chatId: String, message: Message, senderId: String) {
+        val participants = getParticipants(chatId).filter { it != senderId }
+
+        participants.forEach { userId ->
+            val deviceToken = profileRepository.getDeviceToken(userId)
+            if (deviceToken != null) {
+                firebaseNotificationService.sendNotification(
+                    token = deviceToken,
+                    title = "New Message",
+                    body = message.content,
+                    sound = "message_tone",
+                    targetScreen = "ChatActivity",
+                    showDialog = false,
+                    data = mapOf("chatId" to chatId, "senderId" to senderId)
+                )
+            }
         }
     }
 
     /**
-     * Retrieve messages from a chat with pagination.
-     * @param chatId The chat ID.
-     * @param limit The maximum number of messages to retrieve.
-     * @param offset The offset for pagination.
-     * @return A list of Message objects.
+     * Get participants of a chat.
      */
-    fun getMessages(chatId: String, limit: Int, offset: Int): List<Message> {
+    fun getParticipants(chatId: String): List<String> {
         return transaction {
-            Messages.select { Messages.chatId eq chatId }
-                .orderBy(Messages.createdAt, SortOrder.DESC)
-                .limit(limit, offset.toLong())
-                .map { row ->
-                    Message(
-                        senderId = row[Messages.senderId],
-                        contentType = row[Messages.contentType],
-                        content = row[Messages.content]
-                    )
-                }
+            ChatParticipants.select { ChatParticipants.chatId eq chatId }
+                .map { it[ChatParticipants.userId] }
         }
     }
 
     /**
      * Get all active chats for a user.
-     * @param userId The user ID.
-     * @return A list of Chat objects.
      */
     fun getActiveChats(userId: String): List<Chat> {
         return transaction {
@@ -177,39 +132,8 @@ class ChatRepository(private val profileRepository: ProfileRepository) {
     }
 
     /**
-     * Notify participants of a chat about a new message.
-     * @param chatId The chat ID.
-     * @param message The message object.
-     * @param senderId The sender's user ID.
+     * Get chat details with last message & unread count.
      */
-    fun notifyParticipants(chatId: String, message: Message, senderId: String) {
-        val participants = getParticipants(chatId).filter { it != senderId } // Exclude sender
-        participants.forEach { userId ->
-            val deviceToken = profileRepository.getDeviceToken(userId)
-            if (deviceToken != null) {
-                sendNotification(
-                    deviceToken = deviceToken,
-                    title = "New Message",
-                    body = message.content,
-                    data = mapOf("chatId" to chatId, "senderId" to senderId)
-                )
-            }
-        }
-    }
-
-    fun getChatParticipants(chatId: String): List<String> {
-        return transaction {
-            ChatParticipants.select { ChatParticipants.chatId eq chatId }
-                .map { it[ChatParticipants.userId] }
-        }
-    }
-    fun getAllUsers(): List<String> {
-        return transaction {
-            ProfileTable.slice(ProfileTable.userId)
-                .selectAll()
-                .map { it[ProfileTable.userId] }
-        }
-    }
     fun getChatsWithDetails(userId: String): List<Map<String, Any?>> {
         return transaction {
             Chats.innerJoin(ChatParticipants)
@@ -217,7 +141,6 @@ class ChatRepository(private val profileRepository: ProfileRepository) {
                 .map { row ->
                     val chatId = row[Chats.chatId]
 
-                    // Get the last message for the chat
                     val lastMessageRow = Messages
                         .select { Messages.chatId eq chatId }
                         .orderBy(Messages.createdAt, SortOrder.DESC)
@@ -225,7 +148,6 @@ class ChatRepository(private val profileRepository: ProfileRepository) {
                         .singleOrNull()
                     val lastMessage = lastMessageRow?.get(Messages.content) ?: "No messages yet"
 
-                    // Count unread messages for the chat
                     val unreadCount = Messages
                         .select { Messages.chatId eq chatId and (Messages.isRead eq false) }
                         .count()
@@ -242,4 +164,11 @@ class ChatRepository(private val profileRepository: ProfileRepository) {
         }
     }
 
+    fun getAllUsers(): List<String> {
+        return transaction {
+            ProfileTable.slice(ProfileTable.userId)
+                .selectAll()
+                .map { it[ProfileTable.userId] }
+        }
+    }
 }

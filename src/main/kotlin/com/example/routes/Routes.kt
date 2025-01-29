@@ -1,5 +1,6 @@
 package com.example.routes
 
+import com.example.auth.FirebaseNotificationService
 import com.example.firebase.FirebaseStorageService
 import com.example.model.*
 import com.example.repository.*
@@ -11,6 +12,7 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 
@@ -23,7 +25,9 @@ fun Application.configureRouting(
     delegationRepository: DelegationRepository,
     profileService: ProfileService,
     notificationService: NotificationService,
-    authorizationService: AuthorizationService
+    authorizationService: AuthorizationService,
+    firebaseNotificationService: FirebaseNotificationService
+
 ) {
     routing {
         rootRoutes()
@@ -37,6 +41,7 @@ fun Application.configureRouting(
         workRoutes(workLogRepository)
         delegationRoutes(delegationRepository,authorizationService)
         profileReviewRoutes(profileService,delegationRepository)
+        notification(firebaseNotificationService)
     }
 }
 
@@ -150,6 +155,10 @@ private fun Route.profileRoutes(
             val profile = profileService.getAllProfiles()
             call.respond(HttpStatusCode.OK, profile)
         }
+    }
+    get("/all") {
+        val users = profileService.getAllUsers()
+        call.respond(HttpStatusCode.OK, users)
     }
 }
 
@@ -584,15 +593,18 @@ private fun Route.profileReviewRoutes(
                         profileService.reviewPendingUpdates(profileId, decision, reviewerId)
                         call.respond(HttpStatusCode.OK, "Profile updates for $profileId approved")
                     }
+
                     "REJECT" -> {
                         profileService.reviewPendingUpdates(profileId, decision, reviewerId)
                         call.respond(HttpStatusCode.OK, "Profile updates for $profileId rejected")
                     }
+
                     "MODIFY" -> {
                         val modifiedProfile = call.receive<Profile>()
                         profileService.modifyPendingUpdates(profileId, modifiedProfile, reviewerId)
                         call.respond(HttpStatusCode.OK, "Profile updates for $profileId modified and applied")
                     }
+
                     else -> call.respond(HttpStatusCode.BadRequest, "Invalid decision type")
                 }
             } catch (e: Exception) {
@@ -619,3 +631,30 @@ private fun Route.profileReviewRoutes(
         }
     }
 }
+private fun Route.notification(firebaseNotificationService: FirebaseNotificationService) {
+    route("/send-notification") {
+        post {
+            val request = call.receive<Map<String, String>>()
+            val token = request["token"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Token required")
+            val title = request["title"] ?: "New Notification"
+            val body = request["body"] ?: "You have a new update."
+            val sound = request["sound"] ?: "default_notification"
+            val targetScreen = request["targetScreen"] ?: "MainActivity"
+            val showDialog = request["showDialog"]?.toBoolean() ?: false
+
+            // Convert `data` safely
+            val data = try {
+                request["data"]?.let { Json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
+            } catch (e: Exception) {
+                emptyMap()
+            }
+
+            firebaseNotificationService.sendNotification(token, title, body, sound, targetScreen, showDialog, data)
+
+            call.respond(HttpStatusCode.OK, "Notification sent successfully")
+        }
+    }
+}
+
+
+
