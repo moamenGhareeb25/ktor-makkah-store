@@ -11,9 +11,6 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.ktor.server.websocket.*
-import io.ktor.websocket.*
-import kotlinx.coroutines.channels.consumeEach
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 
@@ -137,38 +134,21 @@ private fun Route.profileRoutes(
         // Review pending updates
         post("/review") {
             val params = call.receive<Map<String, String>>()
-            val profileId = params["profileId"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Profile ID required.")
+            val profileId =
+                params["profileId"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Profile ID required.")
             val reviewerId = call.validateAndExtractUserId()
                 ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
-            val decision = params["decision"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Decision required.")
+            val decision =
+                params["decision"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Decision required.")
 
             // Process the review
             profileService.reviewPendingUpdates(profileId, decision, reviewerId)
             call.respond(HttpStatusCode.OK, "Profile review processed successfully.")
         }
         //get all profiles
-        get{
+        get {
             val profile = profileService.getAllProfiles()
-                call.respond(HttpStatusCode.OK, profile)
-        }
-
-        webSocket("/online-status") {
-            val userId = call.parameters["userId"]
-                ?: return@webSocket close(CloseReason(CloseReason.Codes.CANNOT_ACCEPT, "User ID is required"))
-
-            try {
-                profileService.updateOnlineStatus(userId, isOnline = true)
-                incoming.consumeEach { frame ->
-                    if (frame is Frame.Text && frame.readText().equals("disconnect", ignoreCase = true)) {
-                        profileService.updateOnlineStatus(userId, isOnline = false)
-                        close(CloseReason(CloseReason.Codes.NORMAL, "User disconnected"))
-                    }
-                }
-            } catch (e: Exception) {
-                println("WebSocket error: ${e.message}")
-            } finally {
-                profileService.updateOnlineStatus(userId, isOnline = false)
-            }
+            call.respond(HttpStatusCode.OK, profile)
         }
     }
 }
