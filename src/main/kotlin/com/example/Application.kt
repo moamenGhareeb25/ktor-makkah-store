@@ -12,6 +12,7 @@ import com.example.service.WebSocketService
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.ktor.server.websocket.*
 
 fun main() {
     embeddedServer(Netty, port = System.getenv("PORT")?.toInt() ?: 8080) {
@@ -28,8 +29,8 @@ fun Application.module() {
     // ✅ Initialize Database
     DatabaseFactory.init()
 
-    // ✅ Install WebSockets Plugin (Only Here)
-    install(io.ktor.server.websocket.WebSockets)
+    // ✅ Install WebSockets (ONLY HERE)
+    install(WebSockets)
 
     // ✅ Configure Plugins
     configureSerialization()
@@ -65,8 +66,8 @@ fun Application.module() {
         authorizationService
     )
 
-    // ✅ Configure WebSocket Routes (No WebSocket Installation Here)
-    configureWebSockets(chatRepository, profileRepository,webSocketService)
+    // ✅ Configure WebSocket Routes (WITHOUT INSTALLING AGAIN)
+    configureWebSockets(chatRepository, profileRepository, webSocketService)
 
     println("✅ Ktor application started successfully!")
 }
