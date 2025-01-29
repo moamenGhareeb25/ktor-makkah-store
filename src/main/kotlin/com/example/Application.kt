@@ -28,10 +28,10 @@ fun Application.module() {
     // ✅ Initialize Database
     DatabaseFactory.init()
 
-// ✅ Install WebSockets Plugin
+    // ✅ Install WebSockets Plugin (Only Here)
     install(io.ktor.server.websocket.WebSockets)
 
-    // ✅ Configure Plugins (Security, Serialization, Monitoring, HTTP)
+    // ✅ Configure Plugins
     configureSerialization()
     configureMonitoring()
     configureSecurity()
@@ -50,6 +50,7 @@ fun Application.module() {
     val notificationService = NotificationService(profileRepository)
     val pendingUpdateService = PendingUpdateService(profileRepository)
     val profileService = ProfileService(profileRepository, pendingUpdateService, notificationService, authorizationService)
+    val webSocketService = WebSocketService(profileRepository)
 
     // ✅ Configure Routes
     configureRouting(
@@ -64,10 +65,7 @@ fun Application.module() {
         authorizationService
     )
 
-    // ✅ Initialize Services
-    val webSocketService = WebSocketService(profileRepository)
-
-    // ✅ Configure WebSocket Routes
+    // ✅ Configure WebSocket Routes (No WebSocket Installation Here)
     configureWebSockets(chatRepository, profileRepository,webSocketService)
 
     println("✅ Ktor application started successfully!")

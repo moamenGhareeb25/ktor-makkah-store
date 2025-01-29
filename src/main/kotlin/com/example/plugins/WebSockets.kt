@@ -89,7 +89,6 @@ fun Application.configureWebSockets(chatRepository: ChatRepository, profileRepos
                                         )
                                     }
                                 }
-
                                 "disconnect" -> {
                                     webSocketService.removeConnection(userId, this)
                                     close(CloseReason(CloseReason.Codes.NORMAL, "User disconnected"))
@@ -103,4 +102,3 @@ fun Application.configureWebSockets(chatRepository: ChatRepository, profileRepos
             }
         }
     }
-
