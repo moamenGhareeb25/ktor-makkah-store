@@ -43,7 +43,7 @@ fun Application.configureWebSockets(
                                 val messageContent = parsedMessage["content"]?.jsonPrimitive?.content ?: return@consumeEach
                                 if (chatId != null) {
                                     WebSocketManager.broadcastMessage(
-                                        chatRepository.getChatParticipants(chatId),
+                                        chatRepository.getParticipants(chatId),
                                         messageContent,
                                         userId
                                     )
@@ -85,7 +85,7 @@ fun Application.configureWebSockets(
 
                                 if (chatId != null && messageContent != null) {
                                     webSocketService.broadcastMessage(
-                                        chatRepository.getChatParticipants(chatId),
+                                        chatRepository.getParticipants(chatId),
                                         messageContent,
                                         userId
                                     )

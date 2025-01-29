@@ -171,4 +171,5 @@ class ChatRepository(
                 .map { it[ProfileTable.userId] }
         }
     }
+
 }
