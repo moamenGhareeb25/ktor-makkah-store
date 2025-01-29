@@ -152,30 +152,21 @@ private fun Route.profileRoutes(
                 call.respond(HttpStatusCode.OK, profile)
         }
 
-        // WebSocket for managing online/offline status
         webSocket("/online-status") {
             val userId = call.parameters["userId"]
                 ?: return@webSocket close(CloseReason(CloseReason.Codes.CANNOT_ACCEPT, "User ID is required"))
 
             try {
-                // Mark user as online on connection
                 profileService.updateOnlineStatus(userId, isOnline = true)
-
                 incoming.consumeEach { frame ->
-                    if (frame is Frame.Text) {
-                        val message = frame.readText()
-
-                        // Handle disconnect message
-                        if (message.equals("disconnect", ignoreCase = true)) {
-                            profileService.updateOnlineStatus(userId, isOnline = false)
-                            close(CloseReason(CloseReason.Codes.NORMAL, "User disconnected"))
-                        }
+                    if (frame is Frame.Text && frame.readText().equals("disconnect", ignoreCase = true)) {
+                        profileService.updateOnlineStatus(userId, isOnline = false)
+                        close(CloseReason(CloseReason.Codes.NORMAL, "User disconnected"))
                     }
                 }
             } catch (e: Exception) {
                 println("WebSocket error: ${e.message}")
             } finally {
-                // Mark user as offline on disconnection
                 profileService.updateOnlineStatus(userId, isOnline = false)
             }
         }
@@ -593,37 +584,42 @@ private fun Route.profileReviewRoutes(
          * Only delegated reviewers can perform this action.
          */
         post {
-            val reviewerId = call.validateAndExtractUserId()
-                ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+            try {
+                val reviewerId = call.validateAndExtractUserId()
+                    ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
 
-            val params = call.receive<Map<String, String>>()
-            val profileId = params["profileId"]
-                ?: return@post call.respond(HttpStatusCode.BadRequest, "Profile ID required")
-            val decision = params["decision"]
-                ?: return@post call.respond(HttpStatusCode.BadRequest, "Decision required")
+                val params = call.receive<Map<String, String>>()
+                val profileId = params["profileId"]
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, "Profile ID required")
+                val decision = params["decision"]
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, "Decision required")
 
-            // Ensure the requester is a Profile Reviewer
-            if (!delegationRepository.getRoles(reviewerId).any { it.role == "ProfileReviewer" }) {
-                return@post call.respond(HttpStatusCode.Forbidden, "Not authorized to review profiles")
-            }
+                // Ensure only Profile Reviewers can review
+                if (!delegationRepository.getRoles(reviewerId).any { it.role == "ProfileReviewer" }) {
+                    return@post call.respond(HttpStatusCode.Forbidden, "Not authorized to review profiles")
+                }
 
-            when (decision.uppercase()) {
-                "ACCEPT" -> {
-                    profileService.reviewPendingUpdates(profileId, decision, reviewerId)
-                    call.respond(HttpStatusCode.OK, "Profile updates for $profileId approved")
+                when (decision.uppercase()) {
+                    "ACCEPT" -> {
+                        profileService.reviewPendingUpdates(profileId, decision, reviewerId)
+                        call.respond(HttpStatusCode.OK, "Profile updates for $profileId approved")
+                    }
+                    "REJECT" -> {
+                        profileService.reviewPendingUpdates(profileId, decision, reviewerId)
+                        call.respond(HttpStatusCode.OK, "Profile updates for $profileId rejected")
+                    }
+                    "MODIFY" -> {
+                        val modifiedProfile = call.receive<Profile>()
+                        profileService.modifyPendingUpdates(profileId, modifiedProfile, reviewerId)
+                        call.respond(HttpStatusCode.OK, "Profile updates for $profileId modified and applied")
+                    }
+                    else -> call.respond(HttpStatusCode.BadRequest, "Invalid decision type")
                 }
-                "REJECT" -> {
-                    profileService.reviewPendingUpdates(profileId, decision, reviewerId)
-                    call.respond(HttpStatusCode.OK, "Profile updates for $profileId rejected")
-                }
-                "MODIFY" -> {
-                    val modifiedProfile = call.receive<Profile>()
-                    profileService.modifyPendingUpdates(profileId, modifiedProfile, reviewerId)
-                    call.respond(HttpStatusCode.OK, "Profile updates for $profileId modified and applied")
-                }
-                else -> call.respond(HttpStatusCode.BadRequest, "Invalid decision type")
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Error reviewing profile: ${e.message}")
             }
         }
+
 
         /**
          * Retrieves all profiles that require review.

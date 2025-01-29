@@ -1,11 +1,10 @@
 package com.example.plugins
 
-import com.example.firebase.FirebaseStorageService
-import com.example.model.Message
-import com.example.model.TypingIndicator
 import com.example.repository.ChatRepository
 import com.example.repository.ProfileRepository
 import com.example.repository.WebSocketManager
+import com.example.service.UserStatusService
+import com.example.service.WebSocketService
 import io.ktor.server.application.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
@@ -14,26 +13,19 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.util.concurrent.ConcurrentHashMap
 
-val activeConnections = ConcurrentHashMap<String, MutableSet<DefaultWebSocketSession>>()
-
-
-fun Application.configureSocketIO(chatRepository: ChatRepository, profileRepository: ProfileRepository) {
-    val webSocketManager = WebSocketManager(profileRepository)
+fun Application.configureWebSockets(chatRepository: ChatRepository, profileRepository: ProfileRepository,webSocketService: WebSocketService) {
+    val userStatusService = UserStatusService(profileRepository)
 
     install(WebSockets)
 
     routing {
         webSocket("/chat") {
             val userId = call.parameters["userId"]
-            if (userId == null) {
-                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "User ID is required"))
-                return@webSocket
-            }
+                ?: return@webSocket close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "User ID is required"))
 
-            // Add the user to WebSocketManager
-            webSocketManager.addConnection(userId, this)
+            WebSocketManager.addConnection(userId, this)
+            userStatusService.updateUserStatus(userId, true)
 
             try {
                 incoming.consumeEach { frame ->
@@ -46,58 +38,51 @@ fun Application.configureSocketIO(chatRepository: ChatRepository, profileReposit
 
                         when (eventType) {
                             "message" -> {
+                                val messageContent = parsedMessage["content"]?.jsonPrimitive?.content ?: return@consumeEach
                                 if (chatId != null) {
-                                    val message = parsedMessage["content"]?.jsonPrimitive?.content ?: return@consumeEach
-                                    webSocketManager.broadcastMessageToChat(
-                                        participants = chatRepository.getChatParticipants(chatId),
-                                        message = message,
-                                        senderId = userId
+                                    WebSocketManager.broadcastMessage(
+                                        chatRepository.getChatParticipants(chatId),
+                                        messageContent,
+                                        userId
                                     )
                                 }
+                            }
+                            "disconnect" -> {
+                                WebSocketManager.removeConnection(userId, this) { id, status ->
+                                    userStatusService.updateUserStatus(id, status)
+                                }
+                                close(CloseReason(CloseReason.Codes.NORMAL, "User disconnected"))
                             }
                         }
                     }
                 }
             } finally {
-                // Remove the user from WebSocketManager on disconnect
-                webSocketManager.removeConnection(userId, this)
+                WebSocketManager.removeConnection(userId, this) { id, status ->
+                    userStatusService.updateUserStatus(id, status)
+                }
             }
         }
-    }
-}
-
-        fun handleContent(contentType: String, content: String): String {
-    return if (contentType == "file") {
-        val file = java.io.File(content)
-        FirebaseStorageService.uploadFile(file, "application/octet-stream") ?: throw Exception("Failed to upload file")
-    } else {
-        content
-    }
-}
-
-suspend fun broadcastMessage(chatId: String, message: Message, senderId: String) {
-    activeConnections.forEach { (userId, sessions) ->
-        if (userId != senderId) {
-            sessions.forEach { session ->
-                session.sendSerializedMessage(message)
+        webSocket("/ws") {
+            val userId = call.parameters["userId"]
+            if (userId == null) {
+                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "User ID is required"))
+                return@webSocket
             }
-        }
-    }
-}
 
-suspend fun DefaultWebSocketSession.sendSerializedMessage(message: Message) {
-    send(Frame.Text(Json.encodeToString(Message.serializer(), message)))
-}
+            // Add user to WebSocket connections
+            webSocketService.addConnection(userId, this)
 
-suspend fun broadcastTypingIndicator(chatId: String, userId: String, isTyping: Boolean) {
-    val typingIndicator = TypingIndicator(
-        chatId = chatId,
-        userId = userId,
-        isTyping = isTyping
-    )
-    activeConnections.forEach { (_, sessions) ->
-        sessions.forEach { session ->
-            session.send(Frame.Text(Json.encodeToString(TypingIndicator.serializer(), typingIndicator)))
+            try {
+                incoming.consumeEach { frame ->
+                    if (frame is Frame.Text) {
+                        val message = frame.readText()
+                        println("Received message: $message")
+                    }
+                }
+            } finally {
+                // Remove user from WebSocket connections
+                webSocketService.removeConnection(userId, this)
+            }
         }
     }
 }

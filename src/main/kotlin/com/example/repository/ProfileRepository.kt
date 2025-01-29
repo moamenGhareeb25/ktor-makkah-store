@@ -4,6 +4,8 @@ import com.example.database.DeviceTokens
 import com.example.database.ProfileTable
 import com.example.model.Profile
 import com.example.model.UpdateKey
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
@@ -14,6 +16,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
  * Handles database operations for profiles.
  */
 class ProfileRepository {
+    private val mutex = Mutex()
 
     /**
      * Retrieves a profile by user ID.
@@ -153,6 +156,7 @@ class ProfileRepository {
     private fun deserializePendingUpdates(updatesJson: String): Map<UpdateKey, String?> {
         return Json.decodeFromString(updatesJson)
     }
+
     fun applyPendingUpdates(userId: String, updates: Map<UpdateKey, String?>) {
         transaction {
             ProfileTable.update({ ProfileTable.userId eq userId }) {
@@ -163,6 +167,7 @@ class ProfileRepository {
             }
         }
     }
+
     /**
      * Updates the online status of a user in the database and broadcasts the change via WebSocket.
      * @param userId The ID of the user.
@@ -196,6 +201,7 @@ class ProfileRepository {
         // Send the update over WebSocket
         ProfileWebSocketManager.broadcast(statusUpdateJson)
     }
+
     /**
      * Saves a device token for the given user.
      * Ensures there are no duplicate tokens.
@@ -247,15 +253,44 @@ class ProfileRepository {
         }
     }
 
+
     /**
-     * Updates the last seen timestamp for a user when they disconnect.
+     * Updates a user's online status in the database.
      */
-    fun updateLastSeen(userId: String) {
-        transaction {
-            ProfileTable.update({ ProfileTable.userId eq userId }) {
-                it[lastSeen] = System.currentTimeMillis()
+    suspend fun updateOnlineStatus(userId: String, isOnline: Boolean) {
+        mutex.withLock {
+            transaction {
+                ProfileTable.update({ ProfileTable.userId eq userId }) {
+                    it[ProfileTable.isOnline] = isOnline
+                    it[ProfileTable.lastSeen] = if (isOnline) null else System.currentTimeMillis()
+                }
             }
         }
     }
+
+    /**
+     * Updates last seen timestamp when a user disconnects.
+     */
+    suspend fun updateLastSeen(userId: String) {
+        mutex.withLock {
+            transaction {
+                ProfileTable.update({ ProfileTable.userId eq userId }) {
+                    it[ProfileTable.lastSeen] = System.currentTimeMillis()
+                }
+            }
+        }
+    }
+
+    /**
+     * Get online status of a user.
+     */
+    fun isUserOnline(userId: String): Boolean {
+        return transaction {
+            ProfileTable.select { ProfileTable.userId eq userId }
+                .map { it[ProfileTable.isOnline] }
+                .firstOrNull() ?: false
+        }
+    }
 }
+
 

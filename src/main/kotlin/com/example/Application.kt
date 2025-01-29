@@ -8,11 +8,10 @@ import com.example.routes.configureRouting
 import com.example.service.AuthorizationService
 import com.example.service.PendingUpdateService
 import com.example.service.ProfileService
+import com.example.service.WebSocketService
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
-import io.ktor.server.websocket.*
-import java.time.Duration
 
 fun main() {
     embeddedServer(Netty, port = System.getenv("PORT")?.toInt() ?: 8080) {
@@ -29,13 +28,8 @@ fun Application.module() {
     // ✅ Initialize Database
     DatabaseFactory.init()
 
-    // ✅ Install WebSockets Plugin (Fixes the issue)
-    install(WebSockets) {
-        pingPeriod = Duration.ofSeconds(15)
-        timeout = Duration.ofSeconds(30)
-        maxFrameSize = Long.MAX_VALUE
-        masking = false
-    }
+// ✅ Install WebSockets Plugin
+    install(io.ktor.server.websocket.WebSockets)
 
     // ✅ Configure Plugins (Security, Serialization, Monitoring, HTTP)
     configureSerialization()
@@ -70,8 +64,11 @@ fun Application.module() {
         authorizationService
     )
 
-    // ✅ Configure WebSocket (Chat & Profile Status)
-    configureSocketIO(chatRepository, profileRepository)
+    // ✅ Initialize Services
+    val webSocketService = WebSocketService(profileRepository)
+
+    // ✅ Configure WebSocket Routes
+    configureWebSockets(chatRepository, profileRepository,webSocketService)
 
     println("✅ Ktor application started successfully!")
 }

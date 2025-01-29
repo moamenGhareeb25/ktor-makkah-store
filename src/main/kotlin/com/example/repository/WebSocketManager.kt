@@ -8,45 +8,42 @@ import kotlinx.serialization.json.Json
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Manages WebSocket connections and handles real-time user status updates.
+ * Singleton WebSocket manager handling connections and real-time events.
  */
-class WebSocketManager(private val profileRepository: ProfileRepository) {
-
+object WebSocketManager {
     private val connections = ConcurrentHashMap<String, MutableSet<DefaultWebSocketSession>>()
     private val mutex = Mutex()
 
     /**
-     * Add a WebSocket connection for a specific user and mark them as online.
+     * Adds a user WebSocket connection.
      */
     suspend fun addConnection(userId: String, session: DefaultWebSocketSession) {
         mutex.withLock {
             connections.computeIfAbsent(userId) { mutableSetOf() }.add(session)
-            broadcastStatus(userId, true) // Mark user as online
         }
     }
 
     /**
-     * Remove a WebSocket connection for a specific user.
-     * If no active connections remain for the user, mark them as offline.
+     * Removes a WebSocket connection.
+     * Marks user as offline if no more active connections exist.
      */
-    suspend fun removeConnection(userId: String, session: DefaultWebSocketSession) {
+    suspend fun removeConnection(userId: String, session: DefaultWebSocketSession, updateStatus: suspend (String, Boolean) -> Unit) {
         mutex.withLock {
             connections[userId]?.remove(session)
             if (connections[userId]?.isEmpty() == true) {
                 connections.remove(userId)
-                broadcastStatus(userId, false) // Mark user as offline
-                profileRepository.updateLastSeen(userId) // Update "last seen" in the database
+                updateStatus(userId, false)  // Mark as offline
             }
         }
     }
 
     /**
-     * Broadcast a message to all participants of a chat, excluding the sender.
+     * Broadcasts a message to all participants except the sender.
      */
-    suspend fun broadcastMessageToChat(participants: List<String>, message: String, senderId: String? = null) {
+    suspend fun broadcastMessage(participants: List<String>, message: String, senderId: String? = null) {
         mutex.withLock {
             participants.forEach { participantId ->
-                if (participantId != senderId) { // Exclude sender
+                if (participantId != senderId) {
                     connections[participantId]?.forEach { session ->
                         session.send(Frame.Text(message))
                     }
@@ -56,12 +53,10 @@ class WebSocketManager(private val profileRepository: ProfileRepository) {
     }
 
     /**
-     * Broadcast a user's online/offline status to all connected clients.
+     * Sends online/offline status updates to all connected clients.
      */
-    private suspend fun broadcastStatus(userId: String, isOnline: Boolean) {
-        val statusUpdate = Json.encodeToString(
-            mapOf("userId" to userId, "isOnline" to isOnline, "lastSeen" to System.currentTimeMillis())
-        )
+    suspend fun broadcastStatus(userId: String, isOnline: Boolean) {
+        val statusUpdate = Json.encodeToString(mapOf("userId" to userId, "isOnline" to isOnline))
         connections.forEach { (_, sessions) ->
             sessions.forEach { session ->
                 session.send(Frame.Text(statusUpdate))
