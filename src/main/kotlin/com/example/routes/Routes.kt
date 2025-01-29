@@ -2,28 +2,44 @@ package com.example.routes
 
 import com.example.firebase.FirebaseStorageService
 import com.example.model.*
-import com.example.repository.ChatRepository
-import com.example.repository.ProfileRepository
-import com.example.repository.TaskRepository
+import com.example.repository.*
+import com.example.service.ActionType
+import com.example.service.AuthorizationService
+import com.example.service.ProfileService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.server.websocket.*
+import io.ktor.websocket.*
+import kotlinx.coroutines.channels.consumeEach
+import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 
 fun Application.configureRouting(
     chatRepository: ChatRepository,
     profileRepository: ProfileRepository,
-    taskRepository: TaskRepository
+    taskRepository: TaskRepository,
+    kpiRepository: KPIRepository,
+    workLogRepository: WorkLogRepository,
+    delegationRepository: DelegationRepository,
+    profileService: ProfileService,
+    notificationService: NotificationService,
+    authorizationService: AuthorizationService
 ) {
     routing {
         rootRoutes()
-        profileRoutes(profileRepository)
+        profileRoutes(profileService,notificationService,authorizationService)
         chatRoutes(chatRepository)
-        taskRoutes(taskRepository)
+        taskRoutes(taskRepository,kpiRepository)
         statusRoutes(profileRepository)
         deviceTokenRoutes(profileRepository)
+        kpiRoutes(kpiRepository,delegationRepository)
+        dashboardRoutes(taskRepository,kpiRepository)
+        workRoutes(workLogRepository)
+        delegationRoutes(delegationRepository,authorizationService)
+        profileReviewRoutes(profileService,delegationRepository)
     }
 }
 
@@ -33,13 +49,23 @@ private fun Route.rootRoutes() {
     }
 }
 
-private fun Route.profileRoutes(profileRepository: ProfileRepository) {
+/**
+ * Configures the profile-related routes, handling profile creation, updates, deletion, checks,
+ * and real-time online/offline status management.
+ */
+private fun Route.profileRoutes(
+    profileService: ProfileService,
+    notificationService: NotificationService,
+    authorizationService: AuthorizationService
+) {
     route("/profile") {
 
-        // Get profile by ID token
+        // Retrieve a profile by user ID
         get {
-            val userId = call.validateAndExtractUserId() ?: return@get call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
-            val profile = profileRepository.getProfile(userId)
+            val userId = call.validateAndExtractUserId()
+                ?: return@get call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            val profile = profileService.getProfile(userId)
             if (profile != null) {
                 call.respond(HttpStatusCode.OK, profile)
             } else {
@@ -49,86 +75,109 @@ private fun Route.profileRoutes(profileRepository: ProfileRepository) {
 
         // Create a new profile
         post {
-            val userId = call.validateAndExtractUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+            val requesterId = call.validateAndExtractUserId()
+                ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
             val profile = call.receive<Profile>()
 
-            // Ensure the profile being created matches the authenticated user
-            if (profile.userId != userId) {
-                call.respond(HttpStatusCode.BadRequest, "User ID mismatch")
+            // Check if requester is authorized to create the profile
+            if (!authorizationService.isAuthorizedForProfileAction(requesterId, profile.userId, ActionType.CREATE)) {
+                call.respond(HttpStatusCode.Forbidden, "Not authorized to create this profile.")
                 return@post
             }
 
-            profileRepository.createProfile(profile, requesterId = userId)
-            call.respond(HttpStatusCode.Created, "Profile created")
+            // Create the profile and notify reviewers/owner
+            profileService.createProfile(profile, requesterId)
+            notificationService.notifyOwnerOrReviewer(
+                title = "New Profile Created",
+                message = "A new profile for ${profile.name} has been created by $requesterId.",
+                recipientId = authorizationService.getOwnerId()
+            )
+            call.respond(HttpStatusCode.Created, "Profile created successfully.")
         }
 
         // Update an existing profile
         put {
-            val userId = call.validateAndExtractUserId() ?: return@put call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+            val requesterId = call.validateAndExtractUserId()
+                ?: return@put call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
             val updatedProfile = call.receive<Profile>()
 
-            // Ensure the profile being updated matches the authenticated user
-            if (updatedProfile.userId != userId) {
-                call.respond(HttpStatusCode.BadRequest, "User ID mismatch")
-                return@put
-            }
-
-            profileRepository.updateProfile(updatedProfile, requesterId = userId)
-            call.respond(HttpStatusCode.OK, "Profile updated")
+            // Update the profile or save as pending if unauthorized
+            profileService.updateProfile(updatedProfile, requesterId)
+            call.respond(HttpStatusCode.Accepted, "Profile update submitted successfully.")
         }
 
         // Delete a profile
         delete {
-            val userId = call.validateAndExtractUserId() ?: return@delete call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
-            profileRepository.deleteProfile(userId)
-            call.respond(HttpStatusCode.OK, "Profile deleted")
+            val requesterId = call.validateAndExtractUserId()
+                ?: return@delete call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            val userIdToDelete = call.parameters["userId"]
+                ?: return@delete call.respond(HttpStatusCode.BadRequest, "User ID required.")
+
+            // Attempt to delete the profile
+            profileService.deleteProfile(userIdToDelete, requesterId)
+            call.respond(HttpStatusCode.OK, "Profile deleted successfully.")
         }
 
-        // Check if a profile exists; create if not
+        // Check profile existence and handle pending updates if necessary
         get("/check") {
-            val userId = call.validateAndExtractUserId() ?: return@get call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
-            val profile = profileRepository.getProfile(userId)
+            val requesterId = call.validateAndExtractUserId()
+                ?: return@get call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
 
-            if (profile != null) {
+            val userIdToCheck = call.parameters["userId"]
+                ?: return@get call.respond(HttpStatusCode.BadRequest, "User ID required.")
+
+            // Check profile existence and notify owner/reviewer if needed
+            profileService.checkProfile(userIdToCheck, authorizationService.getOwnerId())
+            call.respond(HttpStatusCode.Accepted, "Profile check initiated.")
+        }
+
+        // Review pending updates
+        post("/review") {
+            val params = call.receive<Map<String, String>>()
+            val profileId = params["profileId"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Profile ID required.")
+            val reviewerId = call.validateAndExtractUserId()
+                ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+            val decision = params["decision"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Decision required.")
+
+            // Process the review
+            profileService.reviewPendingUpdates(profileId, decision, reviewerId)
+            call.respond(HttpStatusCode.OK, "Profile review processed successfully.")
+        }
+        //get all profiles
+        get{
+            val profile = profileService.getAllProfiles()
                 call.respond(HttpStatusCode.OK, profile)
-            } else {
-                val newProfile = Profile(
-                    userId = userId,
-                    name = "Unknown",
-                    email = "No email",
-                    personalNumber = null,
-                    workNumber = null,
-                    profilePictureUrl = null,
-                    userRule = null,
-                    createdAt = System.currentTimeMillis(),
-                    nickname = null,
-                    isOnline = false,
-                    lastSeen = null,
-                    pendingUpdates = mutableMapOf()
-                )
-                profileRepository.createProfile(newProfile, requesterId = userId)
-                call.respond(HttpStatusCode.Created, newProfile)
-            }
         }
 
-        // Get user online status
-        get("/{userId}/status") {
+        // WebSocket for managing online/offline status
+        webSocket("/online-status") {
             val userId = call.parameters["userId"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, "User ID is required")
-            val (isOnline, lastSeen) = profileRepository.getUserStatus(userId)
-            call.respond(HttpStatusCode.OK, mapOf("isOnline" to isOnline, "lastSeen" to lastSeen))
-        }
+                ?: return@webSocket close(CloseReason(CloseReason.Codes.CANNOT_ACCEPT, "User ID is required"))
 
-        // Handle profile update decisions
-        put("/{profileId}/decision") {
-            val profileId = call.parameters["profileId"]
-                ?: return@put call.respond(HttpStatusCode.BadRequest, "Profile ID is required")
-            val decision = call.request.queryParameters["decision"]
-                ?: return@put call.respond(HttpStatusCode.BadRequest, "Decision is required")
+            try {
+                // Mark user as online on connection
+                profileService.updateOnlineStatus(userId, isOnline = true)
 
-            val modifiedProfile = if (decision.uppercase() == "MODIFY") call.receiveOrNull<Profile>() else null
-            profileRepository.reviewPendingUpdates(profileId, decision, call.validateAndExtractUserId() ?: "")
-            call.respond(HttpStatusCode.OK, "Profile update decision applied")
+                incoming.consumeEach { frame ->
+                    if (frame is Frame.Text) {
+                        val message = frame.readText()
+
+                        // Handle disconnect message
+                        if (message.equals("disconnect", ignoreCase = true)) {
+                            profileService.updateOnlineStatus(userId, isOnline = false)
+                            close(CloseReason(CloseReason.Codes.NORMAL, "User disconnected"))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                println("WebSocket error: ${e.message}")
+            } finally {
+                // Mark user as offline on disconnection
+                profileService.updateOnlineStatus(userId, isOnline = false)
+            }
         }
     }
 }
@@ -197,19 +246,22 @@ private fun Route.chatRoutes(chatRepository: ChatRepository) {
     }
 }
 
-private fun Route.taskRoutes(taskRepository: TaskRepository) {
+private fun Route.taskRoutes(taskRepository: TaskRepository, kpiRepository: KPIRepository) {
     route("/tasks") {
+        // Fetch all tasks
         get {
             val tasks = taskRepository.getAllTasks()
             call.respond(HttpStatusCode.OK, tasks)
         }
 
+        // Create a new task
         post {
             val task = call.receive<Task>()
             val taskId = taskRepository.createTask(task)
             call.respond(HttpStatusCode.Created, mapOf("taskId" to taskId))
         }
 
+        // Fetch a specific task by ID
         get("/{taskId}") {
             val taskId = call.parameters["taskId"]?.toIntOrNull()
                 ?: return@get call.respond(HttpStatusCode.BadRequest, "Invalid task ID")
@@ -221,6 +273,7 @@ private fun Route.taskRoutes(taskRepository: TaskRepository) {
             }
         }
 
+        // Update an existing task
         put("/{taskId}") {
             val taskId = call.parameters["taskId"]?.toIntOrNull()
                 ?: return@put call.respond(HttpStatusCode.BadRequest, "Invalid task ID")
@@ -233,6 +286,7 @@ private fun Route.taskRoutes(taskRepository: TaskRepository) {
             }
         }
 
+        // Delete a task
         delete("/{taskId}") {
             val taskId = call.parameters["taskId"]?.toIntOrNull()
                 ?: return@delete call.respond(HttpStatusCode.BadRequest, "Invalid task ID")
@@ -243,31 +297,349 @@ private fun Route.taskRoutes(taskRepository: TaskRepository) {
                 call.respond(HttpStatusCode.NotFound, "Task not found")
             }
         }
-    }
-}
 
-private fun Route.statusRoutes(profileRepository: ProfileRepository) {
-    route("/status") {
-        post {
+        // Complete a task and update its associated KPI
+        post("/{taskId}/complete") {
+            val taskId = call.parameters["taskId"]?.toIntOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid task ID")
             val userId = call.parameters["userId"]
                 ?: return@post call.respond(HttpStatusCode.BadRequest, "User ID required")
-            val online = call.parameters["online"]?.toBoolean() ?: false
-            profileRepository.updateAndBroadcastStatus(userId, online)
-            call.respond(HttpStatusCode.OK, "Status updated")
+
+            try {
+                completeTaskAndUpdateKPI(taskId, userId, kpiRepository, taskRepository)
+                call.respond(HttpStatusCode.OK, "Task completed and KPI updated")
+            } catch (e: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, e.message ?: "Error completing task")
+            }
         }
     }
 }
+
+
+    private fun Route.statusRoutes(profileRepository: ProfileRepository) {
+        route("/status") {
+            post {
+                val userId = call.parameters["userId"]
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, "User ID required")
+                val online = call.parameters["online"]?.toBoolean() ?: false
+                profileRepository.updateAndBroadcastStatus(userId, online)
+                call.respond(HttpStatusCode.OK, "Status updated")
+            }
+        }
+    }
 
 private fun Route.deviceTokenRoutes(profileRepository: ProfileRepository) {
-    post("/device-token") {
-        val userId = call.parameters["userId"]
-        val token = call.parameters["token"]
-        if (userId == null || token == null) {
-            call.respond(HttpStatusCode.BadRequest, "User ID and token required")
-            return@post
+    route("/device-token") {
+
+        // Save or update a device token
+        post {
+            val requesterId = call.validateAndExtractUserId()
+                ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            val requestData = call.receive<Map<String, String>>()
+            val token = requestData["token"]
+
+            if (token.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, "Device token is required.")
+                return@post
+            }
+
+            try {
+                profileRepository.saveDeviceToken(requesterId, token)
+                call.respond(HttpStatusCode.OK, "Device token saved successfully.")
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Failed to save device token: ${e.message}")
+            }
         }
-        profileRepository.saveDeviceToken(userId, token)
-        call.respond(HttpStatusCode.OK, "Device token saved")
+
+        // Retrieve a user's device token
+        get {
+            val requesterId = call.validateAndExtractUserId()
+                ?: return@get call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            try {
+                val deviceToken = profileRepository.getDeviceToken(requesterId)
+                if (deviceToken != null) {
+                    call.respond(HttpStatusCode.OK, mapOf("deviceToken" to deviceToken))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, "No device token found for this user.")
+                }
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Error fetching device token: ${e.message}")
+            }
+        }
+
+        // Remove a device token (e.g., on logout)
+        delete {
+            val requesterId = call.validateAndExtractUserId()
+                ?: return@delete call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            try {
+                profileRepository.deleteDeviceToken(requesterId)
+                call.respond(HttpStatusCode.OK, "Device token removed successfully.")
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Failed to remove device token: ${e.message}")
+            }
+        }
     }
 }
 
+
+    private fun Route.kpiRoutes(kpiRepository: KPIRepository,delegationRepository:DelegationRepository) {
+        route("/kpis") {
+            // Fetch KPIs for a specific user
+            get("/{userId}") {
+                val userId =
+                    call.parameters["userId"] ?: return@get call.respond(HttpStatusCode.BadRequest, "User ID required")
+                val kpis = kpiRepository.getKPIsByUser(userId)
+                call.respond(HttpStatusCode.OK, kpis)
+            }
+
+            // Add a new KPI
+            post {
+                val kpi = call.receive<KPI>()
+                val kpiId = kpiRepository.addKPI(kpi)
+                call.respond(HttpStatusCode.Created, mapOf("kpiId" to kpiId))
+            }
+
+            // Update a KPI value
+            put("/{kpiId}") {
+                val kpiId = call.parameters["kpiId"]?.toIntOrNull()
+                    ?: return@put call.respond(HttpStatusCode.BadRequest, "Invalid KPI ID")
+                val newValue = call.receive<Map<String, Int>>()["value"]
+                    ?: return@put call.respond(HttpStatusCode.BadRequest, "Value required")
+
+                val success = kpiRepository.updateKPI(kpiId, newValue)
+                if (success) {
+                    call.respond(HttpStatusCode.OK, "KPI updated successfully")
+                } else {
+                    call.respond(HttpStatusCode.NotFound, "KPI not found")
+                }
+            }
+
+            // Delete a KPI
+            delete("/{kpiId}") {
+                val kpiId = call.parameters["kpiId"]?.toIntOrNull()
+                    ?: return@delete call.respond(HttpStatusCode.BadRequest, "Invalid KPI ID")
+
+                val success = kpiRepository.deleteKPI(kpiId)
+                if (success) {
+                    call.respond(HttpStatusCode.OK, "KPI deleted successfully")
+                } else {
+                    call.respond(HttpStatusCode.NotFound, "KPI not found")
+                }
+            }
+            post("/kpis/review") {
+                val params = call.receive<Map<String, String>>()
+                val kpiId = params["kpiId"]?.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid KPI ID")
+                val reviewerId = params["reviewerId"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Reviewer ID required")
+                val newValue = params["value"]?.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "Value required")
+
+                if (delegationRepository.getRoles(reviewerId).any { it.role == "KPIUpdater" }) {
+                    kpiRepository.updateKPI(kpiId, newValue)
+                    call.respond(HttpStatusCode.OK, "KPI updated successfully")
+                } else {
+                    call.respond(HttpStatusCode.Forbidden, "Not authorized to update KPIs")
+                }
+            }
+        }
+    }
+
+    private fun Route.dashboardRoutes(taskRepository: TaskRepository, kpiRepository: KPIRepository) {
+        get("/dashboard/{userId}") {
+            val userId =
+                call.parameters["userId"] ?: return@get call.respond(HttpStatusCode.BadRequest, "User ID required")
+
+            val tasks = taskRepository.getAllTasks().filter { it.assignedTo == userId }
+            val kpis = kpiRepository.getKPIsByUser(userId)
+
+            call.respond(HttpStatusCode.OK, mapOf("tasks" to tasks, "kpis" to kpis))
+        }
+    }
+
+        fun completeTaskAndUpdateKPI(
+            taskId: Int,
+            userId: String,
+            kpiRepository: KPIRepository,
+            taskRepository: TaskRepository
+        ) {
+            transaction {
+                // Fetch the task by ID
+                val task = taskRepository.getTask(taskId)
+                    ?: throw IllegalArgumentException("Task not found")
+
+                // Fetch the KPI linked to the task
+                val kpi = kpiRepository.getKPIsByUser(userId).find { it.taskId == taskId }
+                    ?: throw IllegalArgumentException("KPI not found for the task")
+
+                // Increment KPI value
+                val newValue = kpi.value + 1
+                kpiRepository.updateKPI(kpi.kpiId!!, newValue)
+
+                // Mark the task as completed
+                taskRepository.updateTask(taskId, task.copy(status = "completed"))
+            }
+        }
+private fun Route.workRoutes(workLogRepository: WorkLogRepository) {
+    route("/work") {
+        post("/start") {
+            val userId = call.parameters["userId"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "User ID required")
+            val logId = workLogRepository.startWork(userId)
+            call.respond(HttpStatusCode.Created, mapOf("logId" to logId, "message" to "Work started"))
+        }
+
+        post("/end") {
+            val userId = call.parameters["userId"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "User ID required")
+            val success = workLogRepository.endWork(userId)
+            if (success) {
+                call.respond(HttpStatusCode.OK, "Work ended")
+            } else {
+                call.respond(HttpStatusCode.NotFound, "No active work session found")
+            }
+        }
+
+        get("/hours/{userId}") {
+            val userId = call.parameters["userId"]
+                ?: return@get call.respond(HttpStatusCode.BadRequest, "User ID required")
+            val totalHours = workLogRepository.getTotalWorkHours(userId)
+            call.respond(HttpStatusCode.OK, mapOf("totalHours" to totalHours))
+        }
+    }
+}
+
+private fun Route.delegationRoutes(
+    delegationRepository: DelegationRepository,
+    authorizationService: AuthorizationService
+) {
+    route("/delegations") {
+
+        /**
+         * Assigns a delegation role to a manager.
+         * Only admins can assign roles.
+         */
+        post("/assign") {
+            val requesterId = call.validateAndExtractUserId()
+                ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            val params = call.receive<Map<String, String>>()
+            val managerId = params["managerId"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "Manager ID required")
+            val role = params["role"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "Role required")
+
+            // Ensure only admins can assign roles
+            if (!authorizationService.isAuthorizedForProfileAction(requesterId, managerId, ActionType.CREATE)) {
+                return@post call.respond(HttpStatusCode.Forbidden, "Not authorized to assign roles.")
+            }
+
+            delegationRepository.assignRole(managerId, role, requesterId)
+            call.respond(HttpStatusCode.Created, "Role $role assigned successfully to $managerId")
+        }
+
+        /**
+         * Revokes a role from a manager.
+         * Only admins can revoke roles.
+         */
+        post("/revoke") {
+            val requesterId = call.validateAndExtractUserId()
+                ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            val params = call.receive<Map<String, String>>()
+            val managerId = params["managerId"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "Manager ID required")
+            val role = params["role"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "Role required")
+
+            // Ensure only admins can revoke roles
+            if (!authorizationService.isAuthorizedForProfileAction(requesterId, managerId, ActionType.DELETE)) {
+                return@post call.respond(HttpStatusCode.Forbidden, "Not authorized to revoke roles.")
+            }
+
+            delegationRepository.revokeRole(managerId, role)
+            call.respond(HttpStatusCode.OK, "Role $role revoked successfully from $managerId")
+        }
+
+        /**
+         * Retrieves all roles assigned to a specific manager.
+         * Only admins or the manager themselves can view their roles.
+         */
+        get("/{managerId}") {
+            val requesterId = call.validateAndExtractUserId()
+                ?: return@get call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            val managerId = call.parameters["managerId"]
+                ?: return@get call.respond(HttpStatusCode.BadRequest, "Manager ID required")
+
+            // Ensure the requester is either the admin or the manager themselves
+            if (requesterId != managerId && !authorizationService.isAdmin(requesterId)) {
+                return@get call.respond(HttpStatusCode.Forbidden, "Not authorized to view roles.")
+            }
+
+            val roles = delegationRepository.getRoles(managerId)
+            call.respond(HttpStatusCode.OK, roles)
+        }
+    }
+}
+private fun Route.profileReviewRoutes(
+    profileService: ProfileService,
+    delegationRepository: DelegationRepository
+) {
+    route("/profiles/review") {
+
+        /**
+         * Handles profile update reviews (accept/reject/modify).
+         * Only delegated reviewers can perform this action.
+         */
+        post {
+            val reviewerId = call.validateAndExtractUserId()
+                ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            val params = call.receive<Map<String, String>>()
+            val profileId = params["profileId"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "Profile ID required")
+            val decision = params["decision"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "Decision required")
+
+            // Ensure the requester is a Profile Reviewer
+            if (!delegationRepository.getRoles(reviewerId).any { it.role == "ProfileReviewer" }) {
+                return@post call.respond(HttpStatusCode.Forbidden, "Not authorized to review profiles")
+            }
+
+            when (decision.uppercase()) {
+                "ACCEPT" -> {
+                    profileService.reviewPendingUpdates(profileId, decision, reviewerId)
+                    call.respond(HttpStatusCode.OK, "Profile updates for $profileId approved")
+                }
+                "REJECT" -> {
+                    profileService.reviewPendingUpdates(profileId, decision, reviewerId)
+                    call.respond(HttpStatusCode.OK, "Profile updates for $profileId rejected")
+                }
+                "MODIFY" -> {
+                    val modifiedProfile = call.receive<Profile>()
+                    profileService.modifyPendingUpdates(profileId, modifiedProfile, reviewerId)
+                    call.respond(HttpStatusCode.OK, "Profile updates for $profileId modified and applied")
+                }
+                else -> call.respond(HttpStatusCode.BadRequest, "Invalid decision type")
+            }
+        }
+
+        /**
+         * Retrieves all profiles that require review.
+         * Only profile reviewers can access this list.
+         */
+        get("/pending") {
+            val reviewerId = call.validateAndExtractUserId()
+                ?: return@get call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            // Ensure only Profile Reviewers can access pending profiles
+            if (!delegationRepository.getRoles(reviewerId).any { it.role == "ProfileReviewer" }) {
+                return@get call.respond(HttpStatusCode.Forbidden, "Not authorized to view pending profiles")
+            }
+
+            val pendingProfiles = profileService.getPendingProfiles()
+            call.respond(HttpStatusCode.OK, pendingProfiles)
+        }
+    }
+}

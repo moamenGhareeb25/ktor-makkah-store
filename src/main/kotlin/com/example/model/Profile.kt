@@ -10,12 +10,12 @@ data class Profile(
     val personalNumber: String?,
     val workNumber: String?,
     val profilePictureUrl: String?,
-    val userRule: String?,
+    val userRole: String?,
     val createdAt: Long? = null,
     val nickname: String?,
     val isOnline: Boolean,
     val lastSeen: Long?,
-    val pendingUpdates: MutableMap<UpdateKey, String?> = mutableMapOf() // Map with enum keys and nullable String values
+    val pendingUpdates: MutableMap<UpdateKey, String?> = mutableMapOf()
 ) {
     init {
         require(userId.isNotBlank()) { "User ID must not be blank" }
