@@ -75,5 +75,6 @@ dependencies {
     implementation("io.socket:socket.io-client:2.1.0")
     implementation("io.ktor:ktor-server-websockets:$ktor_version")
 
+    implementation("io.ktor:ktor-client-cio:2.3.6")
 
 }

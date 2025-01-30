@@ -8,33 +8,28 @@ import java.util.*
 object Firebase {
     fun init() {
         try {
-            if (FirebaseApp.getApps().isNotEmpty()) {
-                println("✅ Firebase already initialized.")
-                return
-            }
+            val firebaseBase64 = System.getenv("FIREBASE_CREDENTIALS")
+                ?: throw IllegalStateException("❌ FIREBASE_CREDENTIALS not set")
 
-            val firebaseCredentials = System.getenv("FIREBASE_CREDENTIALS")
-                ?: throw IllegalStateException("❌ FIREBASE_CREDENTIALS environment variable is missing")
-
-            val storageBucket = System.getenv("FIREBASE_STORAGE_BUCKET")
-                ?: throw IllegalStateException("❌ FIREBASE_STORAGE_BUCKET is missing")
-
-            // Decode Base64 credentials
-            val decodedBytes = Base64.getDecoder().decode(firebaseCredentials)
-            val serviceAccount = decodedBytes.inputStream()
+            // Decode Base64 to JSON
+            val decodedJson = String(Base64.getDecoder().decode(firebaseBase64))
+            val serviceAccount = decodedJson.byteInputStream()
 
             // Initialize Firebase
             val options = FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                .setStorageBucket(storageBucket)
+                .setStorageBucket("makkah-store-operations.appspot.com") // Update with your bucket
                 .build()
 
-            FirebaseApp.initializeApp(options)
-            println("✅ Firebase initialized successfully!")
-
+            if (FirebaseApp.getApps().isEmpty()) {
+                FirebaseApp.initializeApp(options)
+                println("✅ Firebase initialized successfully!")
+            } else {
+                println("✅ Firebase already initialized.")
+            }
         } catch (e: Exception) {
             e.printStackTrace()
-            println("❌ Firebase initialization failed: ${e.message}")
+            println("❌ Error initializing Firebase: ${e.message}")
         }
     }
 }
