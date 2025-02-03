@@ -12,6 +12,8 @@ import java.util.*
 
 class FirebaseNotificationService {
     private val client = HttpClient()
+    private val jsonParser = Json { ignoreUnknownKeys = true }
+
 
     suspend fun sendNotification(token: String, title: String, body: String, sound: String, targetScreen: String, showDialog: Boolean, data: Map<String, String>) {
         val fcmUrl = "https://fcm.googleapis.com/fcm/send"
@@ -21,7 +23,7 @@ class FirebaseNotificationService {
             ?: throw IllegalStateException("❌ FIREBASE_CONFIG not set")
 
         val decodedJson = String(Base64.getDecoder().decode(firebaseBase64))
-        val firebaseConfig = Json.decodeFromString<FirebaseConfig>(decodedJson)
+        val firebaseConfig = jsonParser.decodeFromString<FirebaseConfig>(decodedJson)
 
         val serverKey = firebaseConfig.fcm_server_key
             ?: throw IllegalStateException("❌ Missing FCM Server Key in Firebase Config")
