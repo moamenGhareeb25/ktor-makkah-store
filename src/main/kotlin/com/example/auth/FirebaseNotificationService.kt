@@ -5,14 +5,18 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.*
 
 class FirebaseNotificationService {
     private val client = HttpClient()
+
+    companion object {
+        private val json = Json { ignoreUnknownKeys = true } // 🔹 Static instance for performance
+    }
 
     suspend fun sendNotification(
         token: String,
@@ -36,7 +40,7 @@ class FirebaseNotificationService {
         }
 
         val firebaseConfig = try {
-            Json { ignoreUnknownKeys = true }.decodeFromString<FirebaseConfig>(decodedJson)
+            json.decodeFromString<FirebaseConfig>(decodedJson)
         } catch (e: Exception) {
             throw IllegalStateException("❌ Error parsing FirebaseConfig JSON: ${e.message}")
         }
@@ -59,17 +63,15 @@ class FirebaseNotificationService {
             })
         }
 
+        // 🔹 Convert payload to JSON string correctly
+        val jsonPayload = json.encodeToString(JsonObject.serializer(), payload)
 
-// 🔹 Convert payload to JSON string correctly
-        val jsonPayload = Json.encodeToString(JsonObject.serializer(), payload)
-
-// 🔹 Send FCM Notification
+        // 🔹 Send FCM Notification
         val response: HttpResponse = client.post(fcmUrl) {
             header(HttpHeaders.Authorization, "key=$serverKey")
             header(HttpHeaders.ContentType, ContentType.Application.Json)
-            setBody(jsonPayload) // Corrected serialization
+            setBody(jsonPayload) // 🔹 Corrected serialization
         }
-
 
         println("✅ FCM Response: ${response.status}")
     }

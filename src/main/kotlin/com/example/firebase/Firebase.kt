@@ -8,21 +8,29 @@ import java.io.File
 import java.util.*
 
 object Firebase {
+    private val json = Json { ignoreUnknownKeys = true } // 🔹 Reuse JSON parser
+
     fun init() {
         try {
             val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
                 ?: throw IllegalStateException("❌ FIREBASE_CONFIG not set")
 
-            val decodedJson = String(Base64.getDecoder().decode(firebaseBase64))
-
-            // Parse JSON into a structured object
-            val firebaseConfig = Json.decodeFromString<FirebaseConfig>(decodedJson)
-
-            val tempFile = File.createTempFile("firebase-admin", ".json").apply {
-                writeText(decodedJson)
+            val decodedJson = try {
+                String(Base64.getDecoder().decode(firebaseBase64))
+            } catch (e: Exception) {
+                throw IllegalStateException("❌ Error decoding FIREBASE_CONFIG: ${e.message}")
             }
 
-            // Initialize Firebase with credentials
+            val firebaseConfig = try {
+                json.decodeFromString<FirebaseConfig>(decodedJson)
+            } catch (e: Exception) {
+                throw IllegalStateException("❌ Error parsing FirebaseConfig JSON: ${e.message}")
+            }
+
+            val tempFile = File.createTempFile("firebase-admin", ".json").apply {
+                writeText(decodedJson.replace("\\n", "\n")) // 🔹 Fix escape sequences
+            }
+
             val options = FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(tempFile.inputStream()))
                 .setDatabaseUrl(firebaseConfig.database_url)
@@ -34,6 +42,7 @@ object Firebase {
             } else {
                 println("✅ Firebase already initialized.")
             }
+
         } catch (e: Exception) {
             e.printStackTrace()
             println("❌ Error initializing Firebase: ${e.message}")
@@ -60,4 +69,3 @@ data class FirebaseConfig(
     val storage_bucket: String,   // ✅ Added Storage Bucket
     val auth_api_key: String      // ✅ Added API Key
 )
-
