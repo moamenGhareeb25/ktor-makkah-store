@@ -1,10 +1,11 @@
 package com.example.auth
 
+import com.example.firebase.FirebaseConfig
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -12,23 +13,38 @@ import java.util.*
 
 class FirebaseNotificationService {
     private val client = HttpClient()
-    private val jsonParser = Json { ignoreUnknownKeys = true }
 
-
-    suspend fun sendNotification(token: String, title: String, body: String, sound: String, targetScreen: String, showDialog: Boolean, data: Map<String, String>) {
+    suspend fun sendNotification(
+        token: String,
+        title: String,
+        body: String,
+        sound: String,
+        targetScreen: String,
+        showDialog: Boolean,
+        data: Map<String, String>
+    ) {
         val fcmUrl = "https://fcm.googleapis.com/fcm/send"
 
-        // Retrieve Firebase Config from the environment
+        // 🔹 Retrieve Firebase Config from Render Environment
         val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
             ?: throw IllegalStateException("❌ FIREBASE_CONFIG not set")
 
-        val decodedJson = String(Base64.getDecoder().decode(firebaseBase64))
-        val firebaseConfig = jsonParser.decodeFromString<FirebaseConfig>(decodedJson)
+        val decodedJson = try {
+            String(Base64.getDecoder().decode(firebaseBase64))
+        } catch (e: Exception) {
+            throw IllegalStateException("❌ Error decoding FIREBASE_CONFIG: ${e.message}")
+        }
+
+        val firebaseConfig = try {
+            Json { ignoreUnknownKeys = true }.decodeFromString<FirebaseConfig>(decodedJson)
+        } catch (e: Exception) {
+            throw IllegalStateException("❌ Error parsing FirebaseConfig JSON: ${e.message}")
+        }
 
         val serverKey = firebaseConfig.fcm_server_key
             ?: throw IllegalStateException("❌ Missing FCM Server Key in Firebase Config")
 
-        // Prepare Notification Payload
+        // 🔹 Construct Notification Payload
         val payload = buildJsonObject {
             put("to", token)
             put("notification", buildJsonObject {
@@ -43,22 +59,18 @@ class FirebaseNotificationService {
             })
         }
 
-        // Send Notification Request
+
+// 🔹 Convert payload to JSON string correctly
+        val jsonPayload = Json.encodeToString(JsonObject.serializer(), payload)
+
+// 🔹 Send FCM Notification
         val response: HttpResponse = client.post(fcmUrl) {
             header(HttpHeaders.Authorization, "key=$serverKey")
             header(HttpHeaders.ContentType, ContentType.Application.Json)
-            setBody(Json.encodeToString(payload))
+            setBody(jsonPayload) // Corrected serialization
         }
+
 
         println("✅ FCM Response: ${response.status}")
     }
 }
-
-// 🔹 FirebaseConfig Data Class (if not imported already)
-@kotlinx.serialization.Serializable
-data class FirebaseConfig(
-    val fcm_server_key: String,
-    val databaseUrl: String,
-    val storage_bucket: String,
-    val auth_api_key: String
-)

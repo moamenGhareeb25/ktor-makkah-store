@@ -25,7 +25,7 @@ object Firebase {
             // Initialize Firebase with credentials
             val options = FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(tempFile.inputStream()))
-                .setDatabaseUrl(firebaseConfig.databaseUrl)
+                .setDatabaseUrl(firebaseConfig.database_url)
                 .build()
 
             if (FirebaseApp.getApps().isEmpty()) {
@@ -44,8 +44,20 @@ object Firebase {
 // 🔹 FirebaseConfig Data Class (holds Firebase details)
 @kotlinx.serialization.Serializable
 data class FirebaseConfig(
-    val fcm_server_key: String,
-    val databaseUrl: String,
-    val storage_bucket: String,
-    val auth_api_key: String
+    val type: String,
+    val project_id: String,
+    val private_key_id: String,
+    val private_key: String,
+    val client_email: String,
+    val client_id: String,
+    val auth_uri: String,
+    val token_uri: String,
+    val auth_provider_x509_cert_url: String,
+    val client_x509_cert_url: String,
+    val universe_domain: String,
+    val fcm_server_key: String,   // ✅ Added FCM Key
+    val database_url: String,     // ✅ Added database URL
+    val storage_bucket: String,   // ✅ Added Storage Bucket
+    val auth_api_key: String      // ✅ Added API Key
 )
+
