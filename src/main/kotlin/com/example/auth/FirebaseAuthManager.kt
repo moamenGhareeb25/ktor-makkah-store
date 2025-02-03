@@ -3,12 +3,13 @@ package com.example.auth
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseToken
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-object FirebaseAuthManager { // Renamed to avoid confusion with FirebaseAuth SDK class
+object FirebaseAuthManager {
     private val firebaseAuth: FirebaseAuth
 
     init {
-        // Initialize Firebase if not already initialized
         if (FirebaseApp.getApps().isEmpty()) {
             FirebaseApp.initializeApp()
         }
@@ -16,31 +17,34 @@ object FirebaseAuthManager { // Renamed to avoid confusion with FirebaseAuth SDK
     }
 
     /**
-     * Verifies the ID token and retrieves the FirebaseToken.
+     * Asynchronously verifies an ID token and retrieves the FirebaseToken.
      * @param idToken The ID token to verify.
      * @return The verified FirebaseToken, or null if verification fails.
      */
-    fun verifyIdToken(idToken: String): FirebaseToken? {
-        return try {
-            firebaseAuth.verifyIdToken(idToken)
-        } catch (e: Exception) {
-            println("Error verifying ID token: ${e.message}")
-            null
+    suspend fun verifyIdToken(idToken: String): FirebaseToken? {
+        return withContext(Dispatchers.IO) {
+            try {
+                firebaseAuth.verifyIdToken(idToken)
+            } catch (e: Exception) {
+                println("❌ Error verifying ID token: ${e.message}")
+                null
+            }
         }
     }
 
     /**
-     * Checks if a user exists in Firebase by their user ID.
+     * Checks asynchronously if a user exists in Firebase.
      * @param userId The user ID to check.
-     * @return True if the user exists in Firebase, false otherwise.
+     * @return True if the user exists, false otherwise.
      */
-    fun checkUserInFirebase(userId: String): Boolean {
-        return try {
-            val userRecord = firebaseAuth.getUser(userId)
-            userRecord != null // User exists
-        } catch (e: Exception) {
-            println("Error checking user in Firebase: ${e.message}")
-            false // User does not exist or an error occurred
+    suspend fun checkUserInFirebase(userId: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                firebaseAuth.getUser(userId) != null
+            } catch (e: Exception) {
+                println("❌ Error checking user in Firebase: ${e.message}")
+                false
+            }
         }
     }
 }
