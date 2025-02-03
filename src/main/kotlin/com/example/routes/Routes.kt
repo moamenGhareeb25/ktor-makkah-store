@@ -155,11 +155,13 @@ private fun Route.profileRoutes(
             val profile = profileService.getAllProfiles()
             call.respond(HttpStatusCode.OK, profile)
         }
+
+        get("/all") {
+            val users = profileService.getAllUsers()
+            call.respond(HttpStatusCode.OK, users)
+        }
     }
-    get("/all") {
-        val users = profileService.getAllUsers()
-        call.respond(HttpStatusCode.OK, users)
-    }
+
 }
 
 
