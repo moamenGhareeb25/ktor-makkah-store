@@ -17,10 +17,12 @@ import io.ktor.server.websocket.*
 import java.util.*
 
 fun main() {
-    embeddedServer(Netty, port = System.getenv("PORT")?.toInt() ?: 8080) {
+    val port = System.getenv("PORT")?.toIntOrNull() ?: 10000 // Ensure it's the correct port
+    embeddedServer(Netty, port = port) {
         module()
         printDecodedFirebaseConfig()
     }.start(wait = true)
+
 }
 
 fun printDecodedFirebaseConfig() {
