@@ -13,24 +13,29 @@ class FirebaseNotificationService {
     private val client = HttpClient()
 
     suspend fun sendNotification(token: String, title: String, body: String, sound: String, targetScreen: String, showDialog: Boolean, data: Map<String, String>) {
-        val fcmUrl = "https://fcm.googleapis.com/fcm/send"
+        val fcmUrl = "https://fcm.googleapis.com/v1/projects/makkah-store-operations/messages:send"
         val serverKey = System.getenv("FIREBASE_SERVER_KEY")
             ?: throw IllegalStateException("Missing FIREBASE_SERVER_KEY environment variable")
 
         val payload = buildJsonObject {
-            put("to", token)
-            put("data", buildJsonObject {
-                put("title", title)
-                put("body", body)
-                put("sound", sound)
-                put("targetScreen", targetScreen)
-                put("showDialog", showDialog)
-                data.forEach { (key, value) -> put(key, value) }
+            put("message", buildJsonObject {
+                put("token", token)
+                put("notification", buildJsonObject {
+                    put("title", title)
+                    put("body", body)
+                })
+                put("data", buildJsonObject {
+                    put("sound", sound)
+                    put("targetScreen", targetScreen)
+                    put("showDialog", showDialog)
+                    data.forEach { (key, value) -> put(key, value) }
+                })
             })
         }
 
+
         val response: HttpResponse = client.post(fcmUrl) {
-            header(HttpHeaders.Authorization, "key=$serverKey")
+            header(HttpHeaders.Authorization, "Bearer $serverKey")
             header(HttpHeaders.ContentType, ContentType.Application.Json)
             setBody(Json.encodeToString(payload))
         }
