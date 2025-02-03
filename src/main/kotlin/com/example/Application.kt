@@ -14,12 +14,31 @@ import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.websocket.*
+import java.util.*
 
 fun main() {
     embeddedServer(Netty, port = System.getenv("PORT")?.toInt() ?: 8080) {
         module()
+        printDecodedFirebaseConfig()
     }.start(wait = true)
 }
+
+fun printDecodedFirebaseConfig() {
+    val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
+
+    if (firebaseBase64.isNullOrEmpty()) {
+        println("❌ FIREBASE_CONFIG is not set in the environment.")
+        return
+    }
+
+    try {
+        val decodedJson = String(Base64.getDecoder().decode(firebaseBase64))
+        println("✅ Decoded Firebase Config: \n$decodedJson")
+    } catch (e: Exception) {
+        println("❌ Error decoding FIREBASE_CONFIG: ${e.message}")
+    }
+}
+
 
 fun Application.module() {
     println("🚀 Starting Ktor application...")
