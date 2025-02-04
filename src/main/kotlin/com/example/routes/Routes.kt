@@ -62,10 +62,23 @@ private fun Route.profileRoutes(
 ) {
     route("/profile") {
 
-        // Retrieve a profile by user ID
+        // Retrieve the authenticated user's profile
         get {
             val userId = call.validateAndExtractUserId()
                 ?: return@get call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
+
+            val profile = profileService.getProfile(userId)
+            if (profile != null) {
+                call.respond(HttpStatusCode.OK, profile)
+            } else {
+                call.respond(HttpStatusCode.NotFound, "Profile not found")
+            }
+        }
+
+        // Retrieve any profile by userId
+        get("/{userId}") {
+            val userId = call.parameters["userId"]
+                ?: return@get call.respond(HttpStatusCode.BadRequest, "User ID required")
 
             val profile = profileService.getProfile(userId)
             if (profile != null) {
@@ -118,6 +131,11 @@ private fun Route.profileRoutes(
             val userIdToDelete = call.parameters["userId"]
                 ?: return@delete call.respond(HttpStatusCode.BadRequest, "User ID required.")
 
+            // Check if requester is authorized to delete the profile
+            if (!authorizationService.isAuthorizedForProfileAction(requesterId, userIdToDelete, ActionType.DELETE)) {
+                return@delete call.respond(HttpStatusCode.Forbidden, "Not authorized to delete this profile.")
+            }
+
             // Attempt to delete the profile
             profileService.deleteProfile(userIdToDelete, requesterId)
             call.respond(HttpStatusCode.OK, "Profile deleted successfully.")
@@ -139,30 +157,26 @@ private fun Route.profileRoutes(
         // Review pending updates
         post("/review") {
             val params = call.receive<Map<String, String>>()
-            val profileId =
-                params["profileId"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Profile ID required.")
+            val profileId = params["profileId"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "Profile ID required.")
             val reviewerId = call.validateAndExtractUserId()
                 ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid User ID")
-            val decision =
-                params["decision"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Decision required.")
+            val decision = params["decision"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "Decision required.")
 
             // Process the review
             profileService.reviewPendingUpdates(profileId, decision, reviewerId)
             call.respond(HttpStatusCode.OK, "Profile review processed successfully.")
         }
-        //get all profiles
-        get {
-            val profile = profileService.getAllProfiles()
-            call.respond(HttpStatusCode.OK, profile)
-        }
 
+        // Get all profiles
         get("/all") {
-            val users = profileService.getAllUsers()
-            call.respond(HttpStatusCode.OK, users)
+            val profiles = profileService.getAllProfiles()
+            call.respond(HttpStatusCode.OK, profiles)
         }
     }
-
 }
+
 
 
 private fun Route.chatRoutes(chatRepository: ChatRepository) {
