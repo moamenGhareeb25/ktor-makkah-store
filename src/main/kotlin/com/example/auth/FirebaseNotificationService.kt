@@ -2,30 +2,33 @@ package com.example.auth
 
 import com.example.firebase.FirebaseConfig
 import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.*
 
 class FirebaseNotificationService {
-    private val client = HttpClient()
-
-    companion object {
-        private val json = Json { ignoreUnknownKeys = true } // 🔹 Static instance for performance
+    private val client = HttpClient(CIO) {
+        install(ContentNegotiation) {
+            json(Json { ignoreUnknownKeys = true }) // ✅ Correct installation
+        }
     }
 
     suspend fun sendNotification(
         token: String,
         title: String,
         body: String,
-        sound: String,
-        targetScreen: String,
-        showDialog: Boolean,
-        data: Map<String, String>
+        sound: String = "default",
+        targetScreen: String = "",
+        showDialog: Boolean = false,
+        data: Map<String, String> = emptyMap()
     ) {
         val fcmUrl = "https://fcm.googleapis.com/fcm/send"
 
@@ -40,7 +43,7 @@ class FirebaseNotificationService {
         }
 
         val firebaseConfig = try {
-            json.decodeFromString<FirebaseConfig>(decodedJson)
+            Json.decodeFromString<FirebaseConfig>(decodedJson)
         } catch (e: Exception) {
             throw IllegalStateException("❌ Error parsing FirebaseConfig JSON: ${e.message}")
         }
@@ -63,16 +66,25 @@ class FirebaseNotificationService {
             })
         }
 
-        // 🔹 Convert payload to JSON string correctly
-        val jsonPayload = json.encodeToString(JsonObject.serializer(), payload)
+        try {
+            val response: HttpResponse = client.post(fcmUrl) {
+                header(HttpHeaders.Authorization, "key=$serverKey")
+                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                setBody(Json.encodeToString(payload))
+            }
 
-        // 🔹 Send FCM Notification
-        val response: HttpResponse = client.post(fcmUrl) {
-            header(HttpHeaders.Authorization, "key=$serverKey")
-            header(HttpHeaders.ContentType, ContentType.Application.Json)
-            setBody(jsonPayload) // 🔹 Corrected serialization
+            // 🔹 Print FCM Response Details
+            val responseBody = response.bodyAsText()
+            println("✅ FCM Response: ${response.status}")
+            println("📜 Response Body: $responseBody")
+
+            if (response.status != HttpStatusCode.OK) {
+                throw IllegalStateException("❌ Failed to send FCM: ${response.status.value} - $responseBody")
+            }
+
+        } catch (e: Exception) {
+            println("❌ Error sending FCM: ${e.message}")
+            e.printStackTrace()
         }
-
-        println("✅ FCM Response: ${response.status}")
     }
 }

@@ -10,7 +10,6 @@ import java.util.*
 
 object Firebase {
     private val json = Json { ignoreUnknownKeys = true }
-
     fun init() {
         try {
             val firebaseBase64 = System.getenv("FIREBASE_CONFIG")

@@ -32,7 +32,7 @@ tasks {
     }
 }
 dependencies {
-    // Ktor
+    // Ktor Server
     implementation("io.ktor:ktor-server-core:$ktor_version")
     implementation("io.ktor:ktor-server-content-negotiation:$ktor_version")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
@@ -43,6 +43,12 @@ dependencies {
     implementation("io.ktor:ktor-server-cors:$ktor_version")
     implementation("io.ktor:ktor-server-netty:$ktor_version")
     implementation("ch.qos.logback:logback-classic:1.4.12")
+
+    // Ktor Client
+    implementation("io.ktor:ktor-client-core:$ktor_version")
+    implementation("io.ktor:ktor-client-cio:$ktor_version")
+    implementation("io.ktor:ktor-client-content-negotiation:$ktor_version") // ✅ Missing dependency!
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version") // ✅ Required for JSON serialization
 
     // Testing
     testImplementation("io.ktor:ktor-server-test-host:$ktor_version")
@@ -69,12 +75,10 @@ dependencies {
     // Firebase Admin SDK
     implementation("com.google.firebase:firebase-admin:9.1.1")
 
+    // Dotenv for Environment Variables
     implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
 
     // Socket.IO
     implementation("io.socket:socket.io-client:2.1.0")
     implementation("io.ktor:ktor-server-websockets:$ktor_version")
-
-    implementation("io.ktor:ktor-client-cio:2.3.6")
-
 }
