@@ -21,13 +21,29 @@ object Firebase {
                 throw IllegalStateException("❌ Error decoding FIREBASE_CONFIG: ${e.message}")
             }
 
+            // 🔹 Normalize keys to match FirebaseConfig data class
+            val normalizedJson = decodedJson
+                .replace("FIREBASE_PROJECT_ID", "project_id")
+                .replace("FIREBASE_PRIVATE_KEY_ID", "private_key_id")
+                .replace("FIREBASE_PRIVATE_KEY", "private_key")
+                .replace("FIREBASE_CLIENT_EMAIL", "client_email")
+                .replace("FIREBASE_CLIENT_ID", "client_id")
+                .replace("FIREBASE_AUTH_URI", "auth_uri")
+                .replace("FIREBASE_TOKEN_URI", "token_uri")
+                .replace("FIREBASE_AUTH_PROVIDER_X509_CERT_URL", "auth_provider_x509_cert_url")
+                .replace("FIREBASE_CLIENT_X509_CERT_URL", "client_x509_cert_url")
+                .replace("FIREBASE_DATABASE_URL", "database_url")
+                .replace("FIREBASE_STORAGE_BUCKET", "storage_bucket")
+                .replace("FIREBASE_AUTH_API_KEY", "auth_api_key")
+                .replace("FCM_SERVER_KEY", "fcm_server_key")
+
             val firebaseConfig = try {
-                json.decodeFromString<FirebaseConfig>(decodedJson)
+                json.decodeFromString<FirebaseConfig>(normalizedJson)
             } catch (e: Exception) {
                 throw IllegalStateException("❌ Error parsing FirebaseConfig JSON: ${e.message}")
             }
 
-            // ✅ LOG the extracted Firebase Configuration (PARTIALLY for security)
+            // ✅ LOG extracted Firebase Configuration (PARTIALLY for security)
             println("🔥 Firebase Configuration Loaded:")
             println("📌 Project ID: ${firebaseConfig.project_id}")
             println("📌 Database URL: ${firebaseConfig.database_url}")
@@ -37,7 +53,7 @@ object Firebase {
 
             // Create a temporary file for Firebase credentials
             val tempFile = File.createTempFile("firebase-admin", ".json").apply {
-                writeText(decodedJson.replace("\\n", "\n"))
+                writeText(normalizedJson.replace("\\n", "\n"))
                 deleteOnExit()
             }
 
