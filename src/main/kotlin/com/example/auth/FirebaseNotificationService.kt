@@ -12,7 +12,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.util.*
 
 class FirebaseNotificationService {
     private val client = HttpClient(CIO) {
@@ -33,17 +32,11 @@ class FirebaseNotificationService {
         val fcmUrl = "https://fcm.googleapis.com/fcm/send"
 
         // 🔹 Retrieve Firebase Config from Render Environment
-        val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
+        val firebaseJson = System.getenv("FIREBASE_CONFIG")
             ?: throw IllegalStateException("❌ FIREBASE_CONFIG not set")
 
-        val decodedJson = try {
-            String(Base64.getDecoder().decode(firebaseBase64))
-        } catch (e: Exception) {
-            throw IllegalStateException("❌ Error decoding FIREBASE_CONFIG: ${e.message}")
-        }
-
         val firebaseConfig = try {
-            Json.decodeFromString<FirebaseConfig>(decodedJson)
+            Json.decodeFromString<FirebaseConfig>(firebaseJson) // ✅ Read JSON directly
         } catch (e: Exception) {
             throw IllegalStateException("❌ Error parsing FirebaseConfig JSON: ${e.message}")
         }
