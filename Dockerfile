@@ -18,6 +18,9 @@ WORKDIR /app
 
 COPY --from=builder /app/build/libs/*.jar app.jar
 
+# Ensure Firebase Config is set as an environment variable
+ENV FIREBASE_CONFIG=${FIREBASE_CONFIG}
+
 EXPOSE 8080
 
 CMD ["java", "-jar", "app.jar"]

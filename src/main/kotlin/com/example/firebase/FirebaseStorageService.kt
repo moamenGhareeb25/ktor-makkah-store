@@ -15,6 +15,7 @@ object FirebaseStorageService {
     suspend fun uploadFile(file: File, contentType: String): String? {
         return withContext(Dispatchers.IO) {
             try {
+                Firebase.init()
                 val firebaseConfig = Firebase.init()
                 val bucket = StorageClient.getInstance().bucket(firebaseConfig.storage_bucket)
                 val uniqueFileName = "${UUID.randomUUID()}-${file.name}"

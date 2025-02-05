@@ -6,9 +6,8 @@ import com.google.firebase.FirebaseOptions
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.util.*
 import java.io.ByteArrayInputStream
-import java.util.Base64
+import java.util.*
 
 object Firebase {
     private var firebaseConfig: FirebaseConfig? = null
@@ -17,25 +16,19 @@ object Firebase {
         if (firebaseConfig != null) return firebaseConfig!!
 
         try {
-            val firebaseConfigRaw = System.getenv("FIREBASE_CONFIG")
-                ?: throw IllegalStateException("❌ FIREBASE_CONFIG not set in Render environment.")
+            // 🔹 Load & Decode Firebase Config from Environment Variable
+            val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
+                ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set in the environment.")
 
-            // 🔹 Decode if base64, otherwise use as-is
-            val decodedJson = if (firebaseConfigRaw.startsWith("{")) {
-                firebaseConfigRaw
-            } else {
-                String(Base64.getDecoder().decode(firebaseConfigRaw))
-            }
+            val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64))
 
-            println("🔍 Decoded Firebase Config: $decodedJson")
+            // 🔹 Decode JSON
+            val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
 
-            val config = Json { ignoreUnknownKeys = true }.decodeFromString<FirebaseConfig>(decodedJson)
-
-            val credentialsStream = ByteArrayInputStream(decodedJson.toByteArray())
-
+            // 🔹 Convert JSON to InputStream for Firebase SDK
             val options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(credentialsStream))
-                .setStorageBucket(config.storage_bucket)
+                .setCredentials(GoogleCredentials.fromStream(ByteArrayInputStream(firebaseConfigJson.toByteArray())))
+                .setDatabaseUrl(config.database_url)  // ✅ Ensure Database URL is set
                 .build()
 
             if (FirebaseApp.getApps().isEmpty()) {
@@ -54,7 +47,6 @@ object Firebase {
 }
 
 // 🔹 Firebase Configuration Data Class
-
 @Serializable
 data class FirebaseConfig(
     @SerialName("type") val type: String = "service_account",
@@ -67,7 +59,7 @@ data class FirebaseConfig(
     @SerialName("token_uri") val token_uri: String,
     @SerialName("auth_provider_x509_cert_url") val auth_provider_x509_cert_url: String,
     @SerialName("client_x509_cert_url") val client_x509_cert_url: String,
-    @SerialName("database_url") val database_url: String? = null, // ✅ Make Optional
+    @SerialName("database_url") val database_url: String? = null,  // ✅ Ensure Optional
     @SerialName("storage_bucket") val storage_bucket: String,
     @SerialName("auth_api_key") val auth_api_key: String,
     @SerialName("messaging_sender_id") val messaging_sender_id: String,
@@ -76,4 +68,3 @@ data class FirebaseConfig(
     @SerialName("fcm_server_key") val fcm_server_key: String,
     @SerialName("web_push_certificate_key") val web_push_certificate_key: String
 )
-
