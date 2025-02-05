@@ -29,12 +29,18 @@ object Firebase {
             // ✅ Parse JSON into FirebaseConfig class
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
 
+            // ✅ Log the parsed config
+            println("✅ Parsed FirebaseConfig:\n$config")
+
             // ✅ Fix private key formatting (remove `\\n` and replace with actual newlines)
             val formattedPrivateKey = config.privateKey.replace("\\n", "\n").trim()
 
             // ✅ Create a corrected JSON string with properly formatted private key
             val correctedConfig = config.copy(privateKey = formattedPrivateKey)
             val correctedJson = Json.encodeToString(FirebaseConfig.serializer(), correctedConfig)
+
+            // ✅ Log the corrected JSON
+            println("✅ Corrected Firebase JSON:\n$correctedJson")
 
             // ✅ Convert corrected JSON to InputStream
             val credentials = GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray()))
@@ -43,6 +49,8 @@ object Firebase {
             if (FirebaseApp.getApps().isEmpty()) {
                 val options = FirebaseOptions.builder()
                     .setCredentials(credentials)
+                    .setDatabaseUrl(config.databaseUrl ?: throw IllegalStateException("❌ Database URL is missing!"))
+                    .setStorageBucket(config.storageBucket)
                     .build()
                 FirebaseApp.initializeApp(options)
                 println("✅ Firebase initialized successfully.")
@@ -64,7 +72,7 @@ data class FirebaseConfig(
     @SerialName("type") val type: String = "service_account",
     @SerialName("project_id") val projectId: String,
     @SerialName("private_key_id") val privateKeyId: String,
-    @SerialName("private_key") val privateKey: String,  // ✅ Match with JSON key
+    @SerialName("private_key") val privateKey: String,
     @SerialName("client_email") val clientEmail: String,
     @SerialName("client_id") val clientId: String,
     @SerialName("auth_uri") val authUri: String,
@@ -77,6 +85,6 @@ data class FirebaseConfig(
     @SerialName("messaging_sender_id") val messagingSenderId: String,
     @SerialName("app_id") val appId: String,
     @SerialName("measurement_id") val measurementId: String,
-    @SerialName("fcm_server_key") val fcmServerKey: String,  // ✅ Ensure correct mapping
+    @SerialName("fcm_server_key") val fcmServerKey: String,
     @SerialName("web_push_certificate_key") val webPushCertificateKey: String
 )
