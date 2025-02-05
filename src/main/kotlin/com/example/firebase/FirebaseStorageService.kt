@@ -17,7 +17,7 @@ object FirebaseStorageService {
             try {
                 Firebase.init()
                 val firebaseConfig = Firebase.init()
-                val bucket = StorageClient.getInstance().bucket(firebaseConfig.storage_bucket)
+                val bucket = StorageClient.getInstance().bucket(firebaseConfig.storageBucket)
                 val uniqueFileName = "${UUID.randomUUID()}-${file.name}"
                 val blob = bucket.create(uniqueFileName, file.readBytes(), contentType)
                 println("✅ File uploaded successfully: ${blob.mediaLink}")
