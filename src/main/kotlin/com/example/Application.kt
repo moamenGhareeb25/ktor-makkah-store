@@ -45,6 +45,7 @@ fun printDecodedFirebaseConfig() {
 fun Application.module() {
     println("🚀 Starting Ktor application...")
     printAllEnvironmentVariables()
+    checkFirebaseEnvVariable()
 
     // ✅ Initialize Firebase (Check for errors)
     val firebaseConfig = try {
@@ -110,5 +111,21 @@ fun printAllEnvironmentVariables() {
     println("🔍 Listing all environment variables:")
     System.getenv().forEach { (key, value) ->
         println("$key = $value")
+    }
+}
+
+fun checkFirebaseEnvVariable() {
+    val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
+
+    if (firebaseBase64.isNullOrEmpty()) {
+        println("❌ FIREBASE_CONFIG is not set in the environment.")
+        return
+    }
+
+    try {
+        val decodedJson = String(Base64.getDecoder().decode(firebaseBase64))
+        println("✅ Decoded Firebase Config (First 500 chars):\n${decodedJson.take(500)}...")
+    } catch (e: Exception) {
+        println("❌ Error decoding FIREBASE_CONFIG: ${e.message}")
     }
 }
