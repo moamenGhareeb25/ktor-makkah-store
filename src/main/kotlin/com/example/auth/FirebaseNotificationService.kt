@@ -8,15 +8,25 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 class FirebaseNotificationService {
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) {
-            json(Json { ignoreUnknownKeys = true }) // ✅ Correct installation
+            json(Json { ignoreUnknownKeys = true }) // ✅ Ensure proper JSON handling
+        }
+    }
+
+    // 🔹 Firebase Config (Lazy Initialization)
+    private val firebaseConfig by lazy {
+        try {
+            Firebase.init()
+        } catch (e: Exception) {
+            println("❌ Firebase initialization failed: ${e.message}")
+            throw IllegalStateException("❌ Firebase not initialized properly. Cannot send notifications.")
         }
     }
 
@@ -31,11 +41,9 @@ class FirebaseNotificationService {
     ) {
         val fcmUrl = "https://fcm.googleapis.com/fcm/send"
 
-        // ✅ Retrieve Firebase Config
-        val firebaseConfig = Firebase.init()
-
-        val serverKey = firebaseConfig.fcm_server_key.takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("❌ Missing 'fcm_server_key' in Firebase Config")
+        // ✅ Retrieve & Validate FCM Server Key
+        val serverKey = firebaseConfig.fcmServerKey.takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("❌ Missing or empty 'fcmServerKey' in Firebase Config!")
 
         // 🔹 Construct Notification Payload
         val payload = buildJsonObject {
@@ -56,7 +64,7 @@ class FirebaseNotificationService {
             val response: HttpResponse = client.post(fcmUrl) {
                 header(HttpHeaders.Authorization, "key=$serverKey")
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
-                setBody(Json.encodeToString(payload))
+                setBody(Json.encodeToString(JsonObject.serializer(), payload)) // ✅ Fixed serialization
             }
 
             val responseBody = response.bodyAsText()
