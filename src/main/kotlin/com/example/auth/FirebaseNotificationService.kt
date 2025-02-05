@@ -1,6 +1,6 @@
 package com.example.auth
 
-import com.example.firebase.FirebaseConfig
+import com.example.firebase.Firebase
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -31,15 +31,8 @@ class FirebaseNotificationService {
     ) {
         val fcmUrl = "https://fcm.googleapis.com/fcm/send"
 
-        // 🔹 Retrieve Firebase Config from Render Environment
-        val firebaseJson = System.getenv("FIREBASE_CONFIG")
-            ?: throw IllegalStateException("❌ FIREBASE_CONFIG not set")
-
-        val firebaseConfig = try {
-            Json.decodeFromString<FirebaseConfig>(firebaseJson) // ✅ Read JSON directly
-        } catch (e: Exception) {
-            throw IllegalStateException("❌ Error parsing FirebaseConfig JSON: ${e.message}")
-        }
+        // ✅ **Retrieve Firebase Config**
+        val firebaseConfig = Firebase.init() // 🔹 This now returns the config object
 
         val serverKey = firebaseConfig.fcm_server_key
             ?: throw IllegalStateException("❌ Missing FCM Server Key in Firebase Config")
