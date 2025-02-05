@@ -6,53 +6,48 @@ import com.google.firebase.FirebaseOptions
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.io.File
+import java.util.*
 
 
 object Firebase {
-    private var initialized = false
+    private var firebaseConfig: FirebaseConfig? = null
 
-    fun init() {
-        if (initialized) {
-            println("✅ Firebase already initialized.")
-            return
-        }
+    fun init(): FirebaseConfig {
+        if (firebaseConfig != null) return firebaseConfig!!
 
         try {
-            val firebaseConfigFile = File("/etc/secrets/serviceAccountKey.json") // 🔹 Read from secret file
-            if (!firebaseConfigFile.exists()) {
-                throw IllegalStateException("❌ Firebase config file not found at /etc/secrets/serviceAccountKey.json")
+            val firebaseConfigRaw = System.getenv("FIREBASE_CONFIG")
+                ?: throw IllegalStateException("❌ FIREBASE_CONFIG not set in Render environment.")
+
+            val decodedJson = if (firebaseConfigRaw.startsWith("{")) {
+                firebaseConfigRaw
+            } else {
+                String(Base64.getDecoder().decode(firebaseConfigRaw))
             }
 
-            val jsonContent = firebaseConfigFile.readText()
-            val config = Json.decodeFromString<FirebaseConfig>(jsonContent)
+            println("🔍 Decoded Firebase Config: $decodedJson")
 
-            // ✅ Fix private_key escaping issue
-            val fixedPrivateKey = config.private_key.replace("\\n", "\n")
+            val config = Json { ignoreUnknownKeys = true }.decodeFromString<FirebaseConfig>(decodedJson)
 
             val options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(firebaseConfigFile.inputStream()))
-                .setDatabaseUrl(config.database_url) // ✅ Ensure database URL is set
+                .setCredentials(GoogleCredentials.fromStream(decodedJson.byteInputStream()))
+                .setStorageBucket(config.storage_bucket) // ✅ Only Storage Bucket (No Database URL)
                 .build()
 
             if (FirebaseApp.getApps().isEmpty()) {
                 FirebaseApp.initializeApp(options)
                 println("✅ Firebase initialized successfully!")
-            } else {
-                println("✅ Firebase already initialized.")
             }
 
-            initialized = true
+            firebaseConfig = config
+            return config  // ✅ Return the FirebaseConfig object
 
         } catch (e: Exception) {
-            println("❌ Firebase Initialization Failed: ${e.message}")
             e.printStackTrace()
-            throw e
+            throw IllegalStateException("❌ Firebase Initialization Failed: ${e.message}")
         }
     }
 }
-
-
 
 // 🔹 Firebase Configuration Data Class
 
@@ -68,7 +63,7 @@ data class FirebaseConfig(
     @SerialName("token_uri") val token_uri: String,
     @SerialName("auth_provider_x509_cert_url") val auth_provider_x509_cert_url: String,
     @SerialName("client_x509_cert_url") val client_x509_cert_url: String,
-    @SerialName("database_url") val database_url: String,
+    @SerialName("database_url") val database_url: String? = null, // ✅ Make Optional
     @SerialName("storage_bucket") val storage_bucket: String,
     @SerialName("auth_api_key") val auth_api_key: String,
     @SerialName("messaging_sender_id") val messaging_sender_id: String,

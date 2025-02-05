@@ -31,10 +31,11 @@ class FirebaseNotificationService {
     ) {
         val fcmUrl = "https://fcm.googleapis.com/fcm/send"
 
-        // ✅ **Retrieve Firebase Config**
-        val firebaseConfig = Firebase.init()  // 🔹 Ensures we get the configuration
+        // ✅ Retrieve Firebase Config
+        val firebaseConfig = Firebase.init()
 
-        val serverKey = firebaseConfig.fcm_server_key ?: throw IllegalStateException("❌ Missing 'fcm_server_key' in Firebase Config")
+        val serverKey = firebaseConfig.fcm_server_key.takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("❌ Missing 'fcm_server_key' in Firebase Config")
 
         // 🔹 Construct Notification Payload
         val payload = buildJsonObject {
@@ -58,7 +59,6 @@ class FirebaseNotificationService {
                 setBody(Json.encodeToString(payload))
             }
 
-            // 🔹 Print FCM Response Details
             val responseBody = response.bodyAsText()
             println("✅ FCM Response: ${response.status}")
             println("📜 Response Body: $responseBody")

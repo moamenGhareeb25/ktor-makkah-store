@@ -15,7 +15,8 @@ object FirebaseStorageService {
     suspend fun uploadFile(file: File, contentType: String): String? {
         return withContext(Dispatchers.IO) {
             try {
-                val bucket = StorageClient.getInstance().bucket()
+                val firebaseConfig = Firebase.init()
+                val bucket = StorageClient.getInstance().bucket(firebaseConfig.storage_bucket)
                 val uniqueFileName = "${UUID.randomUUID()}-${file.name}"
                 val blob = bucket.create(uniqueFileName, file.readBytes(), contentType)
                 println("✅ File uploaded successfully: ${blob.mediaLink}")
@@ -23,24 +24,6 @@ object FirebaseStorageService {
             } catch (e: Exception) {
                 println("❌ Error uploading file: ${e.message}")
                 null
-            }
-        }
-    }
-
-    /**
-     * Asynchronously deletes a file from Firebase Storage.
-     */
-    suspend fun deleteFile(fileName: String): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                val bucket = StorageClient.getInstance().bucket()
-                val blob = bucket.get(fileName)
-                blob?.delete() ?: return@withContext false
-                println("✅ File deleted successfully: $fileName")
-                true
-            } catch (e: Exception) {
-                println("❌ Error deleting file: ${e.message}")
-                false
             }
         }
     }
