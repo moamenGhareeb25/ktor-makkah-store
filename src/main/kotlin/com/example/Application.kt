@@ -54,7 +54,7 @@ fun Application.module() {
         return
     }
 
-    println("✅ Firebase Config Loaded for Project: ${firebaseConfig.project_id}")
+    println("✅ Firebase Config Loaded for Project: ${firebaseConfig.projectId}")
 
 
     // ✅ Initialize Database
