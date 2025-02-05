@@ -23,6 +23,8 @@ object Firebase {
 
             val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64))
 
+            println("🔍 Decoded Firebase JSON:\n$firebaseConfigJson")  // Debugging
+
             // 🔹 Deserialize JSON
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
                 .also { cfg ->
@@ -33,28 +35,25 @@ object Firebase {
 
             // 🔹 Fix Private Key Formatting
             val formattedPrivateKey = config.private_key
-                .replace("\\n", "\n") // Ensure newlines are correct
-                .also { key ->
-                    if (!key.startsWith("-----BEGIN PRIVATE KEY-----") || !key.endsWith("-----END PRIVATE KEY-----")) {
-                        throw IllegalStateException("❌ Invalid private key format. Ensure the private key is correctly formatted.")
-                    }
-                }
+                .replace("\\n", "\n") // Convert escaped `\n` to actual newlines
+                .trim()
 
-            // 🔹 Convert JSON back to correct format with fixed private key
-            val correctedJson = Json.encodeToString(FirebaseConfig.serializer(), config.copy(private_key = formattedPrivateKey))
+            println("✅ Fixed Private Key Format:\n$formattedPrivateKey")  // Debugging
 
-            // 🔹 Convert JSON to InputStream for Firebase SDK
+            // 🔹 Convert JSON to InputStream for Firebase SDK (use original JSON)
             val options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray())))
+                .setCredentials(GoogleCredentials.fromStream(ByteArrayInputStream(firebaseConfigJson.toByteArray())))
                 .setDatabaseUrl(config.database_url ?: throw IllegalStateException("❌ Database URL is missing in the Firebase configuration."))
                 .build()
 
             // 🔹 Initialize Firebase App
-            val appName = "makkah-store-operations" // Use a unique name for your app
-            if (FirebaseApp.getApps().isEmpty() || FirebaseApp.getInstance(appName) == null) {
+            val appName = "makkah-store-operations"
+
+            if (FirebaseApp.getApps().isEmpty() || FirebaseApp.getApps().none { it.name == appName }) {
                 FirebaseApp.initializeApp(options, appName)
-                println("✅ Firebase initialized successfully!")
+                println("✅ Firebase initialized successfully with app name: $appName")
             }
+
 
             firebaseConfig = config
             return config
@@ -66,6 +65,7 @@ object Firebase {
         }
     }
 }
+
 
 // 🔹 Firebase Configuration Data Class
 @Serializable
