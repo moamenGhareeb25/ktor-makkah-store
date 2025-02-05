@@ -12,22 +12,33 @@ import java.util.*
 object Firebase {
     private var firebaseConfig: FirebaseConfig? = null
 
+    @Synchronized
     fun init(): FirebaseConfig {
         if (firebaseConfig != null) return firebaseConfig!!
 
         try {
             // 🔹 Retrieve & Decode Base64 Firebase Config
             val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
-                ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set in the environment.")
+                ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set in the environment. Please ensure the environment variable is correctly configured.")
 
             val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64))
 
             // 🔹 Deserialize JSON
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
+                .also { cfg ->
+                    if (cfg.project_id.isBlank() || cfg.private_key.isBlank() || cfg.client_email.isBlank()) {
+                        throw IllegalStateException("❌ Invalid Firebase configuration. Required fields are missing.")
+                    }
+                }
 
             // 🔹 Fix Private Key Formatting
             val formattedPrivateKey = config.private_key
-                .replace("\\n", "\n") // 🔥 Ensure newlines are correct
+                .replace("\\n", "\n") // Ensure newlines are correct
+                .also { key ->
+                    if (!key.startsWith("-----BEGIN PRIVATE KEY-----") || !key.endsWith("-----END PRIVATE KEY-----")) {
+                        throw IllegalStateException("❌ Invalid private key format. Ensure the private key is correctly formatted.")
+                    }
+                }
 
             // 🔹 Convert JSON back to correct format with fixed private key
             val correctedJson = Json.encodeToString(FirebaseConfig.serializer(), config.copy(private_key = formattedPrivateKey))
@@ -35,11 +46,13 @@ object Firebase {
             // 🔹 Convert JSON to InputStream for Firebase SDK
             val options = FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray())))
-                .setDatabaseUrl(config.database_url)  // ✅ Ensure Database URL is set
+                .setDatabaseUrl(config.database_url ?: throw IllegalStateException("❌ Database URL is missing in the Firebase configuration."))
                 .build()
 
-            if (FirebaseApp.getApps().isEmpty()) {
-                FirebaseApp.initializeApp(options)
+            // 🔹 Initialize Firebase App
+            val appName = "makkah-store-operations" // Use a unique name for your app
+            if (FirebaseApp.getApps().isEmpty() || FirebaseApp.getInstance(appName) == null) {
+                FirebaseApp.initializeApp(options, appName)
                 println("✅ Firebase initialized successfully!")
             }
 
@@ -47,6 +60,7 @@ object Firebase {
             return config
 
         } catch (e: Exception) {
+            println("❌ Firebase Initialization Failed: ${e.message}")
             e.printStackTrace()
             throw IllegalStateException("❌ Firebase Initialization Failed: ${e.message}")
         }
