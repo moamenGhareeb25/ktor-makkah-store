@@ -9,25 +9,29 @@ import java.io.File
 import java.util.*
 
 object Firebase {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json {
+        ignoreUnknownKeys = true  // ✅ Ignore extra fields
+        isLenient = true          // ✅ Allow relaxed JSON syntax
+        allowStructuredMapKeys = true
+        prettyPrint = true
+        encodeDefaults = true
+    }
+
     fun init() {
         try {
             val firebaseConfigRaw = System.getenv("FIREBASE_CONFIG")
                 ?: throw IllegalStateException("❌ FIREBASE_CONFIG not set. Make sure it's added to Render.")
 
             val decodedJson = if (firebaseConfigRaw.startsWith("{")) {
-                // 🔹 JSON is already in plain text, use it directly
-                firebaseConfigRaw
+                firebaseConfigRaw // 🔹 Use directly if it's already JSON
             } else {
-                // 🔹 Decode from Base64 (only if needed)
-                String(Base64.getDecoder().decode(firebaseConfigRaw))
+                String(Base64.getDecoder().decode(firebaseConfigRaw)) // 🔹 Decode if Base64 encoded
             }
 
-            val firebaseConfig = try {
-                Json.decodeFromString<FirebaseConfig>(decodedJson)
-            } catch (e: Exception) {
-                throw IllegalStateException("❌ Error parsing FirebaseConfig JSON: ${e.message}")
-            }
+            // ✅ Convert keys from UPPERCASE to lowercase before deserialization
+            val processedJson = decodedJson.replace(Regex("\"FIREBASE_([^\"]+)\""), "\"${'$'}1\"").lowercase()
+
+            val firebaseConfig = json.decodeFromString<FirebaseConfig>(processedJson)
 
             println("🔥 Firebase Configuration Loaded:")
             println("📌 Project ID: ${firebaseConfig.project_id}")
@@ -58,9 +62,7 @@ object Firebase {
     }
 }
 
-
-
-    // 🔹 Firebase Configuration Data Class
+// 🔹 Firebase Configuration Data Class
 @Serializable
 data class FirebaseConfig(
     val type: String,
