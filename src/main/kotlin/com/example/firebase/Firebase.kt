@@ -28,9 +28,13 @@ object Firebase {
                 String(Base64.getDecoder().decode(firebaseConfigRaw)) // 🔹 Decode if Base64 encoded
             }
 
-            // ✅ Convert keys from UPPERCASE to lowercase before deserialization
-            val processedJson = decodedJson.replace(Regex("\"FIREBASE_([^\"]+)\""), "\"${'$'}1\"").lowercase()
+            // 🔹 Convert JSON keys from UPPERCASE to lowercase before deserialization
+            val processedJson = decodedJson
+                .replace(Regex("\"FIREBASE_([^\"]+)\"")) { matchResult ->
+                    "\"${matchResult.groupValues[1].lowercase()}\""
+                }
 
+            // 🔹 Deserialize into FirebaseConfig data class
             val firebaseConfig = json.decodeFromString<FirebaseConfig>(processedJson)
 
             println("🔥 Firebase Configuration Loaded:")
@@ -62,7 +66,7 @@ object Firebase {
     }
 }
 
-// 🔹 Firebase Configuration Data Class
+    // 🔹 Firebase Configuration Data Class
 @Serializable
 data class FirebaseConfig(
     val type: String,
