@@ -21,9 +21,18 @@ object Firebase {
             val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
                 ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set in the environment. Please ensure the environment variable is correctly configured.")
 
-            val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64))
+            val decodedBytes = Base64.getDecoder().decode(firebaseBase64)
+            val firebaseConfigJson = String(decodedBytes, Charsets.UTF_8)
 
-            println("🔍 Decoded Firebase JSON:\n$firebaseConfigJson")  // Debugging
+            println("🔍 Decoded Firebase JSON:\n$firebaseConfigJson") // Debugging
+
+            // 🔹 Validate JSON format
+            try {
+                Json.parseToJsonElement(firebaseConfigJson)
+                println("✅ JSON is valid and well-formed")
+            } catch (e: Exception) {
+                throw IllegalStateException("❌ Invalid JSON format after decoding: ${e.message}")
+            }
 
             // 🔹 Deserialize JSON
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
@@ -34,24 +43,17 @@ object Firebase {
                 }
 
             // 🔹 Fix Private Key Formatting
-            val formattedPrivateKey = config.private_key
-                .replace("\\n", "\n")  // Convert escaped newlines
-                .trim()
+            val formattedPrivateKey = config.private_key.replace("\\n", "\n").trim()
 
-            println("✅ Fixed Private Key Format:\n$formattedPrivateKey") // Debugging step
-
-            // 🔹 Ensure Private Key is Correctly Formatted
             if (!formattedPrivateKey.startsWith("-----BEGIN PRIVATE KEY-----") ||
                 !formattedPrivateKey.endsWith("-----END PRIVATE KEY-----")) {
                 throw IllegalStateException("❌ Invalid private key format. Ensure the private key is correctly formatted.")
             }
 
-            // 🔹 Convert JSON back to correct format with fixed private key
-            val correctedJson = Json.encodeToString(FirebaseConfig.serializer(), config.copy(private_key = formattedPrivateKey))
-
-            // 🔹 Convert JSON to InputStream for Firebase SDK using the **corrected JSON**
+            // 🔹 Pass Correct JSON to Firebase
             val options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray()))) // ✅ Use corrected JSON
+                .setCredentials(GoogleCredentials.fromStream(ByteArrayInputStream(firebaseConfigJson.toByteArray(Charsets.UTF_8))))
+                .setDatabaseUrl(config.database_url ?: throw IllegalStateException("❌ Database URL is missing in the Firebase configuration."))
                 .build()
 
             // 🔹 Initialize Firebase App
@@ -72,7 +74,6 @@ object Firebase {
         }
     }
 }
-
 
 
 // 🔹 Firebase Configuration Data Class
