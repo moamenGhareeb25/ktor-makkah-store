@@ -21,10 +21,12 @@ object Firebase {
             val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
                 ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set!")
 
+            println("🔍 Base64 Firebase Config:\n$firebaseBase64")
+
             // ✅ Decode the base64-encoded JSON string
             val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64)).trim()
 
-            println("✅ Decoded Firebase JSON (First 500 chars):\n${firebaseConfigJson.take(500)}...")
+            println("🔍 Decoded Firebase JSON (First 500 chars):\n${firebaseConfigJson.take(500)}...")
 
             // ✅ Parse JSON into FirebaseConfig class
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
