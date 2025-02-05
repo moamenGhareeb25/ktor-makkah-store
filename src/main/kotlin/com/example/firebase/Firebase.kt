@@ -19,49 +19,40 @@ object Firebase {
         try {
             // 🔹 Retrieve & Decode Base64 Firebase Config
             val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
-                ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set in the environment. Please ensure the environment variable is correctly configured.")
+                ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set. Ensure it is correctly configured in environment variables.")
 
-            val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64))
+            val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64)).trim()
 
-            println("🔍 Decoded Firebase JSON (first 500 chars):\n${firebaseConfigJson.take(500)}")  // Debugging
+            println("🔍 Decoded Firebase JSON (First 500 chars):\n${firebaseConfigJson.take(500)}...")
 
-            // 🔹 Deserialize JSON
+            // 🔹 Deserialize JSON into FirebaseConfig data class
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
-                .also { cfg ->
-                    if (cfg.project_id.isBlank() || cfg.private_key.isBlank() || cfg.client_email.isBlank()) {
-                        throw IllegalStateException("❌ Invalid Firebase configuration. Required fields are missing.")
-                    }
-                }
 
             // 🔹 Fix Private Key Formatting
             val formattedPrivateKey = config.private_key
-                .replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-                .replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
                 .replace("\\n", "\n")
                 .trim()
 
-            println("✅ Corrected Private Key Format: (First 100 chars)\n${formattedPrivateKey.take(100)}...") // Debugging step
-
-            // 🔹 Ensure Private Key is Correctly Formatted
-            if (!formattedPrivateKey.startsWith("-----BEGIN PRIVATE KEY-----") ||
-                !formattedPrivateKey.endsWith("-----END PRIVATE KEY-----")) {
-                throw IllegalStateException("❌ Invalid private key format. Ensure the private key is correctly formatted.")
+            // 🔹 Ensure JSON is valid and 'type' field is present
+            if (config.type != "service_account") {
+                throw IllegalStateException("❌ Invalid Firebase credentials: 'type' must be 'service_account'.")
             }
 
-            // 🔹 Convert JSON back to correct format with fixed private key
+            // 🔹 Create a corrected JSON string with properly formatted private key
             val correctedJson = Json.encodeToString(FirebaseConfig.serializer(), config.copy(private_key = formattedPrivateKey))
 
-            // 🔹 Convert JSON to InputStream for Firebase SDK using the **corrected JSON**
-            val options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray(Charsets.UTF_8))))
-                .build()
+            // 🔹 Convert JSON to InputStream for Firebase SDK
+            val credentials = GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray()))
 
             // 🔹 Initialize Firebase App
-            val appName = "makkah-store-operations"
+            val options = FirebaseOptions.builder()
+                .setCredentials(credentials)
+                .setDatabaseUrl(config.database_url)
+                .build()
 
-            if (FirebaseApp.getApps().isEmpty() || FirebaseApp.getApps().none { it.name == appName }) {
-                FirebaseApp.initializeApp(options, appName)
-                println("✅ Firebase initialized successfully with app name: $appName")
+            if (FirebaseApp.getApps().isEmpty()) {
+                FirebaseApp.initializeApp(options)
+                println("✅ Firebase initialized successfully.")
             }
 
             firebaseConfig = config
@@ -75,10 +66,9 @@ object Firebase {
     }
 }
 
-// 🔹 Firebase Configuration Data Class
 @Serializable
 data class FirebaseConfig(
-    @SerialName("type") val type: String = "service_account",
+    @SerialName("type") val type: String,
     @SerialName("project_id") val project_id: String,
     @SerialName("private_key_id") val private_key_id: String,
     @SerialName("private_key") val private_key: String,
@@ -88,12 +78,6 @@ data class FirebaseConfig(
     @SerialName("token_uri") val token_uri: String,
     @SerialName("auth_provider_x509_cert_url") val auth_provider_x509_cert_url: String,
     @SerialName("client_x509_cert_url") val client_x509_cert_url: String,
-    @SerialName("database_url") val database_url: String? = null,
-    @SerialName("storage_bucket") val storage_bucket: String,
-    @SerialName("auth_api_key") val auth_api_key: String,
-    @SerialName("messaging_sender_id") val messaging_sender_id: String,
-    @SerialName("app_id") val app_id: String,
-    @SerialName("measurement_id") val measurement_id: String,
-    @SerialName("fcm_server_key") val fcm_server_key: String,
-    @SerialName("web_push_certificate_key") val web_push_certificate_key: String
+    @SerialName("database_url") val database_url: String,
+    @SerialName("storage_bucket") val storage_bucket: String
 )

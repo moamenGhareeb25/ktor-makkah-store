@@ -46,9 +46,15 @@ fun Application.module() {
     println("🚀 Starting Ktor application...")
 
     // ✅ Initialize Firebase
-    Firebase.init()
-    val firebaseConfig = Firebase.init()
-    println("✅ Firebase Config Loaded: ${firebaseConfig.project_id}")
+    // ✅ Initialize Firebase (Check for errors)
+    val firebaseConfig = try {
+        Firebase.init()
+    } catch (e: Exception) {
+        println("❌ Firebase Initialization Failed: ${e.message}")
+        return
+    }
+
+    println("✅ Firebase Config Loaded for Project: ${firebaseConfig.project_id}")
 
 
     // ✅ Initialize Database
