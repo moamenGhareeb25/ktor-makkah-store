@@ -34,18 +34,19 @@ object Firebase {
             // ✅ Log the parsed config
             println("✅ Parsed FirebaseConfig:\n$config")
 
-            // ✅ Fix private key formatting (remove `\\n` and replace with actual newlines)
-            val formattedPrivateKey = config.privateKey.replace("\\n", "\n").trim()
+            // ✅ Fix private key formatting (ensure correct newline replacement)
+            val formattedPrivateKey = config.privateKey.replace("\\\\n", "\n").trim()
 
-            // ✅ Create a corrected JSON string with properly formatted private key
+// ✅ Create a corrected JSON string with properly formatted private key
             val correctedConfig = config.copy(privateKey = formattedPrivateKey)
             val correctedJson = Json.encodeToString(FirebaseConfig.serializer(), correctedConfig)
 
-            // ✅ Log the corrected JSON
+// ✅ Log the corrected JSON
             println("✅ Corrected Firebase JSON:\n$correctedJson")
 
-            // ✅ Convert corrected JSON to InputStream
+// ✅ Convert corrected JSON to InputStream
             val credentials = GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray()))
+
 
             // ✅ Initialize Firebase
             if (FirebaseApp.getApps().isEmpty()) {
@@ -71,7 +72,7 @@ object Firebase {
 
 @Serializable
 data class FirebaseConfig(
-    @SerialName("type") val type: String = "service_account",
+    @SerialName("type") val type: String = "service_account", // ✅ Always set to "service_account"
     @SerialName("project_id") val projectId: String,
     @SerialName("private_key_id") val privateKeyId: String,
     @SerialName("private_key") val privateKey: String,
