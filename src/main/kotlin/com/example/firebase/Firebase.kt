@@ -7,7 +7,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.util.*
-
+import java.io.ByteArrayInputStream
+import java.util.Base64
 
 object Firebase {
     private var firebaseConfig: FirebaseConfig? = null
@@ -19,6 +20,7 @@ object Firebase {
             val firebaseConfigRaw = System.getenv("FIREBASE_CONFIG")
                 ?: throw IllegalStateException("❌ FIREBASE_CONFIG not set in Render environment.")
 
+            // 🔹 Decode if base64, otherwise use as-is
             val decodedJson = if (firebaseConfigRaw.startsWith("{")) {
                 firebaseConfigRaw
             } else {
@@ -29,9 +31,11 @@ object Firebase {
 
             val config = Json { ignoreUnknownKeys = true }.decodeFromString<FirebaseConfig>(decodedJson)
 
+            val credentialsStream = ByteArrayInputStream(decodedJson.toByteArray())
+
             val options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(decodedJson.byteInputStream()))
-                .setStorageBucket(config.storage_bucket) // ✅ Only Storage Bucket (No Database URL)
+                .setCredentials(GoogleCredentials.fromStream(credentialsStream))
+                .setStorageBucket(config.storage_bucket)
                 .build()
 
             if (FirebaseApp.getApps().isEmpty()) {
@@ -40,7 +44,7 @@ object Firebase {
             }
 
             firebaseConfig = config
-            return config  // ✅ Return the FirebaseConfig object
+            return config
 
         } catch (e: Exception) {
             e.printStackTrace()

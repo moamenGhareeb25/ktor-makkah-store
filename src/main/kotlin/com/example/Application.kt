@@ -47,6 +47,9 @@ fun Application.module() {
 
     // ✅ Initialize Firebase
     Firebase.init()
+    val firebaseConfig = Firebase.init()
+    println("✅ Firebase Config Loaded: ${firebaseConfig.project_id}")
+
 
     // ✅ Initialize Database
     DatabaseFactory.init()
