@@ -5,26 +5,34 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.io.File
 
-object Firebase {
-    private var firebaseConfig: FirebaseConfig? = null
 
-    fun init(): FirebaseConfig {
-        if (firebaseConfig != null) return firebaseConfig!!  // ✅ Ensure it always returns the config
+object Firebase {
+    private var initialized = false
+
+    fun init() {
+        if (initialized) {
+            println("✅ Firebase already initialized.")
+            return
+        }
 
         try {
-            val firebaseConfigFile = File("/etc/secrets/serviceAccountKey.json")
+            val firebaseConfigFile = File("/etc/secrets/serviceAccountKey.json") // 🔹 Read from secret file
             if (!firebaseConfigFile.exists()) {
                 throw IllegalStateException("❌ Firebase config file not found at /etc/secrets/serviceAccountKey.json")
             }
 
             val jsonContent = firebaseConfigFile.readText()
-            firebaseConfig = kotlinx.serialization.json.Json.decodeFromString<FirebaseConfig>(jsonContent)
+            val config = Json.decodeFromString<FirebaseConfig>(jsonContent)
+
+            // ✅ Fix private_key escaping issue
+            val fixedPrivateKey = config.private_key.replace("\\n", "\n")
 
             val options = FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(firebaseConfigFile.inputStream()))
-                .setDatabaseUrl(firebaseConfig!!.database_url)
+                .setDatabaseUrl(config.database_url) // ✅ Ensure database URL is set
                 .build()
 
             if (FirebaseApp.getApps().isEmpty()) {
@@ -34,7 +42,7 @@ object Firebase {
                 println("✅ Firebase already initialized.")
             }
 
-            return firebaseConfig!!
+            initialized = true
 
         } catch (e: Exception) {
             println("❌ Firebase Initialization Failed: ${e.message}")
@@ -43,7 +51,6 @@ object Firebase {
         }
     }
 }
-
 
 
 
