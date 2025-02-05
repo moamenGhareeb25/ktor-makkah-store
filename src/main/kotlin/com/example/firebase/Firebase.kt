@@ -18,30 +18,25 @@ object Firebase {
         encodeDefaults = true
     }
 
-    private var firebaseConfig: FirebaseConfig? = null // ✅ Store config for reuse
+    private var firebaseConfig: FirebaseConfig? = null
 
     fun init(): FirebaseConfig {
-        if (firebaseConfig != null) return firebaseConfig!! // ✅ Return cached config
+        if (firebaseConfig != null) return firebaseConfig!!  // ✅ Return cached config
 
         try {
             val firebaseConfigRaw = System.getenv("FIREBASE_CONFIG")
                 ?: throw IllegalStateException("❌ FIREBASE_CONFIG not set. Make sure it's added to Render.")
 
             val decodedJson = if (firebaseConfigRaw.startsWith("{")) {
-                firebaseConfigRaw
+                firebaseConfigRaw // ✅ JSON is already formatted correctly
             } else {
-                String(Base64.getDecoder().decode(firebaseConfigRaw))
+                String(Base64.getDecoder().decode(firebaseConfigRaw)) // ✅ Decode if Base64 encoded
             }
 
-            val processedJson = decodedJson
-                .replace(Regex("\"FIREBASE_([^\"]+)\"")) { matchResult ->
-                    "\"${matchResult.groupValues[1].lowercase()}\""
-                }
-                .replace(Regex("\"FCM_SERVER_KEY\"")) { "\"fcm_server_key\"" }
+            println("🔍 Received JSON: $decodedJson")
 
-            println("🔍 Processed JSON: $processedJson")
-
-            firebaseConfig = json.decodeFromString<FirebaseConfig>(processedJson)
+            // ✅ Deserialize JSON **without modifying keys**
+            firebaseConfig = json.decodeFromString<FirebaseConfig>(decodedJson)
 
             println("🔥 Firebase Configuration Loaded:")
             println("📌 Project ID: ${firebaseConfig!!.project_id}")
@@ -75,6 +70,7 @@ object Firebase {
     }
 }
 
+
 // 🔹 Firebase Configuration Data Class
 @Serializable
 data class FirebaseConfig(
@@ -87,9 +83,13 @@ data class FirebaseConfig(
     @SerialName("FIREBASE_TOKEN_URI") val token_uri: String,
     @SerialName("FIREBASE_AUTH_PROVIDER_X509_CERT_URL") val auth_provider_x509_cert_url: String,
     @SerialName("FIREBASE_CLIENT_X509_CERT_URL") val client_x509_cert_url: String,
-    @SerialName("FIREBASE_UNIVERSE_DOMAIN") val universe_domain: String,
-    @SerialName("FCM_SERVER_KEY") val fcm_server_key: String,
     @SerialName("FIREBASE_DATABASE_URL") val database_url: String,
     @SerialName("FIREBASE_STORAGE_BUCKET") val storage_bucket: String,
-    @SerialName("FIREBASE_AUTH_API_KEY") val auth_api_key: String
+    @SerialName("FIREBASE_AUTH_API_KEY") val auth_api_key: String,
+    @SerialName("FIREBASE_MESSAGING_SENDER_ID") val messaging_sender_id: String,
+    @SerialName("FIREBASE_APP_ID") val app_id: String,
+    @SerialName("FIREBASE_MEASUREMENT_ID") val measurement_id: String,
+    @SerialName("FCM_SERVER_KEY") val fcm_server_key: String,
+    @SerialName("WEB_PUSH_CERTIFICATE_KEY") val web_push_certificate_key: String
 )
+
