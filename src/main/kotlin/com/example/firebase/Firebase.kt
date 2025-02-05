@@ -17,42 +17,33 @@ object Firebase {
         if (firebaseConfig != null) return firebaseConfig!!
 
         try {
-            // 🔹 Retrieve & Decode Base64 Firebase Config
+            // ✅ Get the base64-encoded JSON string
             val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
-                ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set. Ensure it is correctly configured in environment variables.")
+                ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set!")
 
+            // ✅ Decode the base64-encoded JSON string
             val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64)).trim()
 
-            println("🔍 Decoded Firebase JSON (First 500 chars):\n${firebaseConfigJson.take(500)}...")
+            println("✅ Decoded Firebase JSON (First 500 chars):\n${firebaseConfigJson.take(500)}...")
 
-            // 🔹 Deserialize JSON into FirebaseConfig data class
+            // ✅ Parse JSON into FirebaseConfig class
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
 
-            // 🔹 Ensure JSON has 'type' field and it is 'service_account'
-            if (config.type != "service_account") {
-                throw IllegalStateException("❌ Invalid Firebase credentials: 'type' must be 'service_account'.")
-            }
+            // ✅ Fix private key formatting (remove `\\n` and replace with actual newlines)
+            val formattedPrivateKey = config.privateKey.replace("\\n", "\n").trim()
 
-            // 🔹 Fix Private Key Formatting
-            val formattedPrivateKey = config.privateKey
-                .replace("\\n", "\n") // Convert escaped newlines
-                .trim()
-
-            // ✅ Create a corrected FirebaseConfig instance
+            // ✅ Create a corrected JSON string with properly formatted private key
             val correctedConfig = config.copy(privateKey = formattedPrivateKey)
-
-            // ✅ Serialize it back to JSON
             val correctedJson = Json.encodeToString(FirebaseConfig.serializer(), correctedConfig)
 
-            // ✅ Convert JSON to InputStream for Firebase SDK
+            // ✅ Convert corrected JSON to InputStream
             val credentials = GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray()))
 
-            // ✅ Initialize Firebase App
-            val options = FirebaseOptions.builder()
-                .setCredentials(credentials)
-                .build()
-
+            // ✅ Initialize Firebase
             if (FirebaseApp.getApps().isEmpty()) {
+                val options = FirebaseOptions.builder()
+                    .setCredentials(credentials)
+                    .build()
                 FirebaseApp.initializeApp(options)
                 println("✅ Firebase initialized successfully.")
             }
