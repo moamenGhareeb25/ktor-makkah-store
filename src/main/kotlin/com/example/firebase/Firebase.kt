@@ -28,26 +28,26 @@ object Firebase {
             // 🔹 Deserialize JSON into FirebaseConfig data class
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
 
+            // 🔹 Ensure JSON has 'type' field and it is 'service_account'
+            if (config.type != "service_account") {
+                throw IllegalStateException("❌ Invalid Firebase credentials: 'type' must be 'service_account'.")
+            }
+
             // 🔹 Fix Private Key Formatting
             val formattedPrivateKey = config.privateKey
                 .replace("\\n", "\n") // Convert escaped newlines
                 .trim()
 
-            // 🔹 Ensure JSON is valid and 'type' field is present
-            if (config.type != "service_account") {
-                throw IllegalStateException("❌ Invalid Firebase credentials: 'type' must be 'service_account'.")
-            }
-
-            // ✅ Use `formattedPrivateKey` inside the config before serializing
+            // ✅ Create a corrected FirebaseConfig instance
             val correctedConfig = config.copy(privateKey = formattedPrivateKey)
 
-            // ✅ Create a corrected JSON string
+            // ✅ Serialize it back to JSON
             val correctedJson = Json.encodeToString(FirebaseConfig.serializer(), correctedConfig)
 
-            // 🔹 Convert JSON to InputStream for Firebase SDK (✅ Use Corrected JSON)
+            // ✅ Convert JSON to InputStream for Firebase SDK
             val credentials = GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray()))
 
-            // 🔹 Initialize Firebase App
+            // ✅ Initialize Firebase App
             val options = FirebaseOptions.builder()
                 .setCredentials(credentials)
                 .build()

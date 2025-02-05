@@ -44,8 +44,8 @@ fun printDecodedFirebaseConfig() {
 
 fun Application.module() {
     println("🚀 Starting Ktor application...")
+    printAllEnvironmentVariables()
 
-    // ✅ Initialize Firebase
     // ✅ Initialize Firebase (Check for errors)
     val firebaseConfig = try {
         Firebase.init()
@@ -105,4 +105,10 @@ fun Application.module() {
     configureWebSockets(chatRepository, profileRepository, webSocketService)
 
     println("✅ Ktor application started successfully!")
+}
+fun printAllEnvironmentVariables() {
+    println("🔍 Listing all environment variables:")
+    System.getenv().forEach { (key, value) ->
+        println("$key = $value")
+    }
 }
