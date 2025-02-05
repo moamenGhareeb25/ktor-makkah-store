@@ -31,8 +31,13 @@ object Firebase {
             // ✅ Parse JSON into FirebaseConfig class
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
 
-            // ✅ Ensure the `type` field is present
-            val formattedPrivateKey = config.privateKey.replace("\\\\n", "\n").replace("\r\n", "\n").trim()
+            // ✅ Ensure proper private key formatting
+            val formattedPrivateKey = config.privateKey
+                .replace("\\\\n", "\n") // Fix escaped newlines
+                .replace("\\r\\n", "\n") // Fix Windows-style newlines
+                .replace("\r\n", "\n") // Extra safeguard
+                .replace("\r", "\n") // Ensure all line breaks are `\n`
+                .trim()
 
             // ✅ Manually construct JSON to ensure correctness
             val correctedJson = """
@@ -50,9 +55,9 @@ object Firebase {
                 }
             """.trimIndent()
 
-            println("✅ Manually Constructed JSON:\n$correctedJson")
+            println("✅ JSON Before Firebase Initialization:\n$correctedJson")
 
-            // ✅ Convert JSON to InputStream
+            // ✅ Convert JSON to InputStream with UTF-8 encoding
             val credentials = GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray(Charsets.UTF_8)))
 
             // ✅ Initialize Firebase
@@ -76,6 +81,7 @@ object Firebase {
         }
     }
 }
+
 
 @Serializable
 data class FirebaseConfig(
