@@ -26,27 +26,34 @@ object Firebase {
             // ✅ Decode the base64-encoded JSON string
             val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64)).trim()
 
-            println("🔍 Decoded Firebase JSON (First 500 chars):\n${firebaseConfigJson.take(500)}...")
+            println("🔍 Decoded Firebase JSON:\n${firebaseConfigJson.take(500)}...")
 
             // ✅ Parse JSON into FirebaseConfig class
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
 
-            // ✅ Log the parsed config
-            println("✅ Parsed FirebaseConfig:\n$config")
+            // ✅ Ensure the `type` field is present
+            val formattedPrivateKey = config.privateKey.replace("\\\\n", "\n").replace("\r\n", "\n").trim()
 
-            // ✅ Fix private key formatting (ensure correct newline replacement)
-            val formattedPrivateKey = config.privateKey.replace("\\\\n", "\n").trim()
+            // ✅ Manually construct JSON to ensure correctness
+            val correctedJson = """
+                {
+                    "type": "service_account",
+                    "project_id": "${config.projectId}",
+                    "private_key_id": "${config.privateKeyId}",
+                    "private_key": "${formattedPrivateKey}",
+                    "client_email": "${config.clientEmail}",
+                    "client_id": "${config.clientId}",
+                    "auth_uri": "${config.authUri}",
+                    "token_uri": "${config.tokenUri}",
+                    "auth_provider_x509_cert_url": "${config.authProviderCertUrl}",
+                    "client_x509_cert_url": "${config.clientCertUrl}"
+                }
+            """.trimIndent()
 
-// ✅ Create a corrected JSON string with properly formatted private key
-            val correctedConfig = config.copy(privateKey = formattedPrivateKey)
-            val correctedJson = Json.encodeToString(FirebaseConfig.serializer(), correctedConfig)
+            println("✅ Manually Constructed JSON:\n$correctedJson")
 
-// ✅ Log the corrected JSON
-            println("✅ Corrected Firebase JSON:\n$correctedJson")
-
-// ✅ Convert corrected JSON to InputStream
-            val credentials = GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray()))
-
+            // ✅ Convert JSON to InputStream
+            val credentials = GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray(Charsets.UTF_8)))
 
             // ✅ Initialize Firebase
             if (FirebaseApp.getApps().isEmpty()) {
@@ -59,8 +66,8 @@ object Firebase {
                 println("✅ Firebase initialized successfully.")
             }
 
-            firebaseConfig = correctedConfig
-            return correctedConfig
+            firebaseConfig = config
+            return config
 
         } catch (e: Exception) {
             println("❌ Firebase Initialization Failed: ${e.message}")
