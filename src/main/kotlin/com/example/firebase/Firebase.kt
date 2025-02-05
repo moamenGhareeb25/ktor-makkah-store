@@ -52,7 +52,6 @@ object Firebase {
             // 🔹 Convert JSON to InputStream for Firebase SDK using the **corrected JSON**
             val options = FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray()))) // ✅ Use corrected JSON
-                .setDatabaseUrl(config.database_url ?: throw IllegalStateException("❌ Database URL is missing in the Firebase configuration."))
                 .build()
 
             // 🔹 Initialize Firebase App
