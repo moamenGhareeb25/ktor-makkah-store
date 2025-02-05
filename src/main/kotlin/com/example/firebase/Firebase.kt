@@ -16,18 +16,25 @@ object Firebase {
         if (firebaseConfig != null) return firebaseConfig!!
 
         try {
-            // 🔹 Load & Decode Firebase Config from Environment Variable
+            // 🔹 Retrieve & Decode Base64 Firebase Config
             val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
                 ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set in the environment.")
 
             val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64))
 
-            // 🔹 Decode JSON
+            // 🔹 Deserialize JSON
             val config = Json.decodeFromString<FirebaseConfig>(firebaseConfigJson)
+
+            // 🔹 Fix Private Key Formatting
+            val formattedPrivateKey = config.private_key
+                .replace("\\n", "\n") // 🔥 Ensure newlines are correct
+
+            // 🔹 Convert JSON back to correct format with fixed private key
+            val correctedJson = Json.encodeToString(FirebaseConfig.serializer(), config.copy(private_key = formattedPrivateKey))
 
             // 🔹 Convert JSON to InputStream for Firebase SDK
             val options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(ByteArrayInputStream(firebaseConfigJson.toByteArray())))
+                .setCredentials(GoogleCredentials.fromStream(ByteArrayInputStream(correctedJson.toByteArray())))
                 .setDatabaseUrl(config.database_url)  // ✅ Ensure Database URL is set
                 .build()
 
@@ -59,7 +66,7 @@ data class FirebaseConfig(
     @SerialName("token_uri") val token_uri: String,
     @SerialName("auth_provider_x509_cert_url") val auth_provider_x509_cert_url: String,
     @SerialName("client_x509_cert_url") val client_x509_cert_url: String,
-    @SerialName("database_url") val database_url: String? = null,  // ✅ Ensure Optional
+    @SerialName("database_url") val database_url: String? = null,
     @SerialName("storage_bucket") val storage_bucket: String,
     @SerialName("auth_api_key") val auth_api_key: String,
     @SerialName("messaging_sender_id") val messaging_sender_id: String,
