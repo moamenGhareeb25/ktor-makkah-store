@@ -46,8 +46,17 @@ fun Application.configureRouting(
         delegationRoutes(delegationRepository, authorizationService)
         profileReviewRoutes(profileService, delegationRepository)
         notification(firebaseNotificationService)
+        get("/debug-routes") {
+            val availableRoutes = this@routing.javaClass.declaredMethods.map { it.name }
+            call.respond(HttpStatusCode.OK, mapOf("routes" to availableRoutes))
+        }
+
+        println("✅ Registered Routes:")
+        this.children.forEach { println("➡ ${it.selector}") }
     }
+
 }
+
 
 
 private fun Route.rootRoutes() {
