@@ -27,23 +27,26 @@ fun Application.configureRouting(
     notificationService: NotificationService,
     authorizationService: AuthorizationService,
     firebaseNotificationService: FirebaseNotificationService
-
 ) {
     routing {
+        intercept(ApplicationCallPipeline.Monitoring) {
+            println("📥 Incoming request: ${call.request.httpMethod.value} ${call.request.uri}")
+        }
         rootRoutes()
-        profileRoutes(profileService,notificationService,authorizationService)
+        profileRoutes(profileService, notificationService, authorizationService)
         chatRoutes(chatRepository)
-        taskRoutes(taskRepository,kpiRepository)
+        taskRoutes(taskRepository, kpiRepository)
         statusRoutes(profileRepository)
         deviceTokenRoutes(profileRepository)
-        kpiRoutes(kpiRepository,delegationRepository)
-        dashboardRoutes(taskRepository,kpiRepository)
+        kpiRoutes(kpiRepository, delegationRepository)
+        dashboardRoutes(taskRepository, kpiRepository)
         workRoutes(workLogRepository)
-        delegationRoutes(delegationRepository,authorizationService)
-        profileReviewRoutes(profileService,delegationRepository)
+        delegationRoutes(delegationRepository, authorizationService)
+        profileReviewRoutes(profileService, delegationRepository)
         notification(firebaseNotificationService)
     }
 }
+
 
 private fun Route.rootRoutes() {
     get("/") {

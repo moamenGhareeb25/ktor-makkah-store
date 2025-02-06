@@ -45,6 +45,8 @@ class FirebaseNotificationService {
         val serverKey = firebaseConfig.fcmServerKey.takeIf { it.isNotBlank() }
             ?: throw IllegalStateException("❌ Missing or empty 'fcmServerKey' in Firebase Config!")
 
+        println("🔍 Using FCM Server Key: ${serverKey.take(20)}...") // Show first 20 characters
+
         // 🔹 Construct Notification Payload
         val payload = buildJsonObject {
             put("to", token)
@@ -64,7 +66,7 @@ class FirebaseNotificationService {
             val response: HttpResponse = client.post(fcmUrl) {
                 header(HttpHeaders.Authorization, "key=$serverKey")
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
-                setBody(Json.encodeToString(JsonObject.serializer(), payload)) // ✅ Fixed serialization
+                setBody(Json.encodeToString(JsonObject.serializer(), payload))
             }
 
             val responseBody = response.bodyAsText()
@@ -80,4 +82,5 @@ class FirebaseNotificationService {
             e.printStackTrace()
         }
     }
+
 }
