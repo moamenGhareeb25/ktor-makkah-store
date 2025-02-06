@@ -17,7 +17,7 @@ import io.ktor.server.websocket.*
 import java.util.*
 
 fun main() {
-    val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+    val port = 8080  // 🔥 Force to 8080
     embeddedServer(Netty, port) {
         module()
     }.start(wait = true)
