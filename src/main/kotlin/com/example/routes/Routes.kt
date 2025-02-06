@@ -28,10 +28,12 @@ fun Application.configureRouting(
     authorizationService: AuthorizationService,
     firebaseNotificationService: FirebaseNotificationService
 ) {
-    routing {
+    routing { // ✅ This MUST wrap all routes
         intercept(ApplicationCallPipeline.Monitoring) {
             println("📥 Incoming request: ${call.request.httpMethod.value} ${call.request.uri}")
         }
+
+        // ✅ Ensure all routes are properly registered inside routing {}
         rootRoutes()
         profileRoutes(profileService, notificationService, authorizationService)
         chatRoutes(chatRepository)
