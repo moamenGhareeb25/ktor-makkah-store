@@ -46,6 +46,7 @@ fun Application.configureRouting(
         delegationRoutes(delegationRepository, authorizationService)
         profileReviewRoutes(profileService, delegationRepository)
         notification(firebaseNotificationService)
+        test()
         get("/debug-routes") {
             val availableRoutes = this@routing.javaClass.declaredMethods.map { it.name }
             call.respond(HttpStatusCode.OK, mapOf("routes" to availableRoutes))
@@ -687,4 +688,10 @@ private fun Route.notification(firebaseNotificationService: FirebaseNotification
 }
 
 
-
+private fun Route.test(){
+    route ("/test-route"){
+        get() {
+            call.respond(HttpStatusCode.OK, "Test Route Works!")
+        }
+    }
+}
