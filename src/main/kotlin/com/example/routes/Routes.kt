@@ -690,7 +690,7 @@ private fun Route.notification(firebaseNotificationService: FirebaseNotification
 
 private fun Route.test(){
     route ("/test-route"){
-        get() {
+        get{
             call.respond(HttpStatusCode.OK, "Test Route Works!")
         }
     }
