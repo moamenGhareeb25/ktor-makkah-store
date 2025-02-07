@@ -94,8 +94,8 @@ class ChatRepository(
                     token = deviceToken,
                     title = "New Message",
                     body = message.content,
-                    sound = "message_tone",
-                    data = mapOf("chatId" to chatId, "senderId" to senderId)
+                    data = mapOf("chatId" to chatId, "senderId" to senderId),
+                    type = "chat"
                 )
             }
         }

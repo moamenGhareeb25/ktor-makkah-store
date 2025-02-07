@@ -45,8 +45,8 @@ class FirebaseNotificationService {
         token: String,
         title: String,
         body: String,
-        sound: String = "default",
-        data: Map<String, String> = emptyMap()
+        type: String, // ✅ Notification type (e.g., "task", "update", "chat")
+        data: Map<String, String> = emptyMap() // ✅ Additional data if needed
     ) {
         val accessToken = getAccessToken()
 
@@ -60,20 +60,22 @@ class FirebaseNotificationService {
 
         val fcmUrl = "https://fcm.googleapis.com/v1/projects/$projectId/messages:send"
 
-        // 🔹 Construct FCM Payload (JSON)
+        // ✅ Payload with `type` included in `data`
         val payload = """
-        {
-          "message": {
-            "token": "$token",
-            "notification": {
-              "title": "$title",
-              "body": "$body",
-              "sound": "$sound"
-            },
-            "data": ${Json.encodeToString(data)}
-          }
+    {
+      "message": {
+        "token": "$token",
+        "notification": {
+          "title": "$title",
+          "body": "$body"
+        },
+        "data": {
+          "type": "$type",  // ✅ Example: "task", "update", "chat"
+          ${data.entries.joinToString(",") { "\"${it.key}\": \"${it.value}\"" }}
         }
-        """.trimIndent()
+      }
+    }
+    """.trimIndent()
 
         try {
             val response: HttpResponse = client.post(fcmUrl) {

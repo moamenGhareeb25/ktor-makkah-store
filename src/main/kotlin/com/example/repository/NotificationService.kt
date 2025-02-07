@@ -15,12 +15,10 @@ class NotificationService(
         title: String,
         message: String,
         recipientId: String,
-        sound: String = "default_notification",
-        targetScreen: String = "MainActivity",
-        showDialog: Boolean = false,
-        data: Map<String, String> = emptyMap()
+        data: Map<String, String> = emptyMap(),
+        type: String
     ) {
-        sendNotificationToDevice(recipientId, title, message, sound, targetScreen, showDialog, data)
+        sendNotificationToDevice(recipientId, title, message, data, type )
     }
 
     /**
@@ -30,12 +28,10 @@ class NotificationService(
         title: String,
         message: String,
         recipientId: String,
-        sound: String = "alert_sound",
-        targetScreen: String = "ReviewActivity",
-        showDialog: Boolean = true,
-        data: Map<String, String> = emptyMap()
+        data: Map<String, String> = emptyMap(),
+        type: String
     ) {
-        sendNotificationToDevice(recipientId, title, message, sound, targetScreen, showDialog, data)
+        sendNotificationToDevice(recipientId, title, message, data, type )
     }
 
     /**
@@ -45,10 +41,8 @@ class NotificationService(
         userId: String,
         title: String,
         message: String,
-        sound: String,
-        targetScreen: String,
-        showDialog: Boolean,
-        data: Map<String, String>
+        data: Map<String, String>,
+        type:String
     ) {
         val deviceToken = profileRepository.getDeviceToken(userId)
         if (deviceToken != null) {
@@ -56,8 +50,8 @@ class NotificationService(
                 token = deviceToken,
                 title = title,
                 body = message,
-                sound = sound,
-                data = data
+                data = data,
+                type = type
             )
         }
     }

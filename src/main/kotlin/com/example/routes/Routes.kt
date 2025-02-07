@@ -121,7 +121,8 @@ private fun Route.profileRoutes(
             notificationService.notifyOwnerOrReviewer(
                 title = "New Profile Created",
                 message = "A new profile for ${profile.name} has been created by $requesterId.",
-                recipientId = authorizationService.getOwnerId()
+                recipientId = authorizationService.getOwnerId(),
+                type = "create profile"
             )
             call.respond(HttpStatusCode.Created, "Profile created successfully.")
         }

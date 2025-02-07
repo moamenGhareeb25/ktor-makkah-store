@@ -37,7 +37,8 @@ class ProfileService(
         notificationService.notifyOwnerOrReviewer(
             title = "Profile Created",
             message = "A new profile for ${profile.name} has been created by $requesterId.",
-            recipientId = requesterId
+            recipientId = requesterId,
+            type = "new profile created"
         )
     }
 
@@ -55,7 +56,8 @@ class ProfileService(
                 notificationService.notifyOwnerOrReviewer(
                     title = "Profile Update Pending",
                     message = "A profile update for ${profile.name} requires your review.",
-                    recipientId = ownerId
+                    recipientId = ownerId,
+                    type = "check profile "
                 )
             }
             return profile
@@ -67,7 +69,9 @@ class ProfileService(
             notificationService.notifyOwnerOrReviewer(
                 title = "Profile Exists in Firebase",
                 message = "The profile for user ID $userId exists in Firebase but not in the database. Please review and create it.",
-                recipientId = ownerId
+                recipientId = ownerId,
+                type = "profile update"
+
             )
             return null
         }
@@ -76,7 +80,9 @@ class ProfileService(
         notificationService.notifyOwnerOrReviewer(
             title = "Profile Missing",
             message = "The profile for user ID $userId is missing. Please create it.",
-            recipientId = ownerId
+            recipientId = ownerId,
+            type = "profile update"
+
         )
         return null
     }
@@ -92,14 +98,16 @@ class ProfileService(
             notificationService.notifyOwnerOrReviewer(
                 title = "Profile Update Pending",
                 message = "A profile update for ${profile.name} requires your review.",
-                recipientId = requesterId
+                recipientId = requesterId,
+                type = "profile update"
             )
         } else {
             profileRepository.updateProfile(profile)
             notificationService.notifyUser(
                 title = "Profile Updated",
                 message = "Your profile has been updated successfully.",
-                recipientId = profile.userId
+                recipientId = profile.userId,
+                type = "profile update"
             )
         }
     }
@@ -117,7 +125,8 @@ class ProfileService(
         notificationService.notifyUser(
             title = "Profile Deleted",
             message = "Your profile has been deleted.",
-            recipientId = userId
+            recipientId = userId,
+            type = "deleteProfile"
         )
     }
 
@@ -144,7 +153,8 @@ class ProfileService(
                 notificationService.notifyUser(
                     title = "Profile Update Approved",
                     message = "Your profile updates have been approved.",
-                    recipientId = profileId
+                    recipientId = profileId,
+                    type = "review decision"
                 )
             }
             "REJECT" -> {
@@ -152,7 +162,8 @@ class ProfileService(
                 notificationService.notifyUser(
                     title = "Profile Update Rejected",
                     message = "Your profile updates were rejected.",
-                    recipientId = profileId
+                    recipientId = profileId,
+                    type = "review decision"
                 )
             }
             else -> throw IllegalArgumentException("Invalid decision: $decision")
@@ -179,7 +190,8 @@ class ProfileService(
         notificationService.notifyUser(
             title = "Profile Updated",
             message = "Your profile has been modified and updated.",
-            recipientId = profileId
+            recipientId = profileId,
+            type = "update profile "
         )
     }
 
