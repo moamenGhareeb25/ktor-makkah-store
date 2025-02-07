@@ -680,7 +680,7 @@ private fun Route.notification(firebaseNotificationService: FirebaseNotification
                 emptyMap()
             }
 
-            firebaseNotificationService.sendNotification(token, title, body, sound, targetScreen, showDialog, data)
+            firebaseNotificationService.sendNotification(token, title, body, sound)
 
             call.respond(HttpStatusCode.OK, "Notification sent successfully")
         }

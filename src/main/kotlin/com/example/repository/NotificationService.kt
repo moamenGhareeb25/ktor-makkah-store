@@ -57,8 +57,6 @@ class NotificationService(
                 title = title,
                 body = message,
                 sound = sound,
-                targetScreen = targetScreen,
-                showDialog = showDialog,
                 data = data
             )
         }

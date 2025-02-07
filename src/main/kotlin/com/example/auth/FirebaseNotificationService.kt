@@ -1,6 +1,7 @@
 package com.example.auth
 
-import com.example.firebase.Firebase
+import com.google.auth.oauth2.GoogleCredentials
+import com.google.auth.oauth2.ServiceAccountCredentials
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -8,25 +9,35 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.serialization.json.jsonObject
+import java.io.ByteArrayInputStream
+import java.util.*
 
 class FirebaseNotificationService {
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) {
-            json(Json { ignoreUnknownKeys = true }) // ✅ Ensure proper JSON handling
+            json(Json { ignoreUnknownKeys = true })
         }
     }
 
-    // 🔹 Firebase Config (Lazy Initialization)
-    private val firebaseConfig by lazy {
-        try {
-            Firebase.init()
-        } catch (e: Exception) {
-            println("❌ Firebase initialization failed: ${e.message}")
-            throw IllegalStateException("❌ Firebase not initialized properly. Cannot send notifications.")
+    private suspend fun getAccessToken(): String {
+        return withContext(Dispatchers.IO) {
+            val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
+                ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set!")
+
+            val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64)).trim()
+
+            // 🔹 Convert JSON to ServiceAccountCredentials
+            val credentials = ServiceAccountCredentials
+                .fromStream(ByteArrayInputStream(firebaseConfigJson.toByteArray()))
+                .createScoped(listOf("https://www.googleapis.com/auth/firebase.messaging"))
+
+            credentials.refreshIfExpired()
+            credentials.accessToken.tokenValue
         }
     }
 
@@ -35,38 +46,40 @@ class FirebaseNotificationService {
         title: String,
         body: String,
         sound: String = "default",
-        targetScreen: String = "",
-        showDialog: Boolean = false,
         data: Map<String, String> = emptyMap()
     ) {
-        val fcmUrl = "https://fcm.googleapis.com/fcm/send"
+        val accessToken = getAccessToken()
 
-        // ✅ Retrieve & Validate FCM Server Key
-        val serverKey = firebaseConfig.fcmServerKey.takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("❌ Missing or empty 'fcmServerKey' in Firebase Config!")
+        // 🔹 Extract `project_id` from Firebase Config JSON
+        val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
+            ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set!")
 
-        println("🔍 Using FCM Server Key: ${serverKey.take(20)}...") // Show first 20 characters
+        val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64)).trim()
+        val projectId = Json.parseToJsonElement(firebaseConfigJson).jsonObject["project_id"]?.toString()?.replace("\"", "")
+            ?: throw IllegalStateException("❌ Missing 'project_id' in Firebase Config!")
 
-        // 🔹 Construct Notification Payload
-        val payload = buildJsonObject {
-            put("to", token)
-            put("notification", buildJsonObject {
-                put("title", title)
-                put("body", body)
-                put("sound", sound)
-                put("click_action", targetScreen)
-            })
-            put("data", buildJsonObject {
-                put("showDialog", showDialog)
-                data.forEach { (key, value) -> put(key, value) }
-            })
+        val fcmUrl = "https://fcm.googleapis.com/v1/projects/$projectId/messages:send"
+
+        // 🔹 Construct FCM Payload (JSON)
+        val payload = """
+        {
+          "message": {
+            "token": "$token",
+            "notification": {
+              "title": "$title",
+              "body": "$body",
+              "sound": "$sound"
+            },
+            "data": ${Json.encodeToString(data)}
+          }
         }
+        """.trimIndent()
 
         try {
             val response: HttpResponse = client.post(fcmUrl) {
-                header(HttpHeaders.Authorization, "key=$serverKey")
+                header(HttpHeaders.Authorization, "Bearer $accessToken")
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
-                setBody(Json.encodeToString(JsonObject.serializer(), payload))
+                setBody(payload)
             }
 
             val responseBody = response.bodyAsText()
@@ -76,11 +89,9 @@ class FirebaseNotificationService {
             if (response.status != HttpStatusCode.OK) {
                 throw IllegalStateException("❌ Failed to send FCM: ${response.status.value} - $responseBody")
             }
-
         } catch (e: Exception) {
             println("❌ Error sending FCM: ${e.message}")
             e.printStackTrace()
         }
     }
-
 }

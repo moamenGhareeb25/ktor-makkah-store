@@ -95,8 +95,6 @@ class ChatRepository(
                     title = "New Message",
                     body = message.content,
                     sound = "message_tone",
-                    targetScreen = "ChatActivity",
-                    showDialog = false,
                     data = mapOf("chatId" to chatId, "senderId" to senderId)
                 )
             }
