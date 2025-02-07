@@ -12,8 +12,7 @@ import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.*
 import java.io.ByteArrayInputStream
 import java.util.*
 
@@ -31,7 +30,7 @@ class FirebaseNotificationService {
 
             val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64)).trim()
 
-            // 🔹 Convert JSON to ServiceAccountCredentials
+            // Convert JSON to ServiceAccountCredentials
             val credentials = ServiceAccountCredentials
                 .fromStream(ByteArrayInputStream(firebaseConfigJson.toByteArray()))
                 .createScoped(listOf("https://www.googleapis.com/auth/firebase.messaging"))
@@ -50,38 +49,36 @@ class FirebaseNotificationService {
     ) {
         val accessToken = getAccessToken()
 
-        // 🔹 Extract `project_id` from Firebase Config JSON
+        // Extract `project_id` from Firebase Config JSON
         val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
             ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set!")
 
         val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64)).trim()
-        val projectId = Json.parseToJsonElement(firebaseConfigJson).jsonObject["project_id"]?.toString()?.replace("\"", "")
+        val projectId = Json.parseToJsonElement(firebaseConfigJson).jsonObject["project_id"]?.jsonPrimitive?.content
             ?: throw IllegalStateException("❌ Missing 'project_id' in Firebase Config!")
 
         val fcmUrl = "https://fcm.googleapis.com/v1/projects/$projectId/messages:send"
 
-        // ✅ Payload with `type` included in `data`
-        val payload = """
-    {
-      "message": {
-        "token": "$token",
-        "notification": {
-          "title": "$title",
-          "body": "$body"
-        },
-        "data": {
-          "type": "$type",  // ✅ Example: "task", "update", "chat"
-          ${data.entries.joinToString(",") { "\"${it.key}\": \"${it.value}\"" }}
+        // ✅ Corrected JSON Formatting for `data`
+        val payload = buildJsonObject {
+            put("message", buildJsonObject {
+                put("token", token)
+                put("notification", buildJsonObject {
+                    put("title", title)
+                    put("body", body)
+                })
+                put("data", buildJsonObject {
+                    put("type", type)  // ✅ Example: "task", "update", "chat"
+                    data.forEach { (key, value) -> put(key, value) } // ✅ Proper key-value map
+                })
+            })
         }
-      }
-    }
-    """.trimIndent()
 
         try {
             val response: HttpResponse = client.post(fcmUrl) {
                 header(HttpHeaders.Authorization, "Bearer $accessToken")
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
-                setBody(payload)
+                setBody(Json.encodeToString(payload)) // ✅ Ensure correct JSON structure
             }
 
             val responseBody = response.bodyAsText()
