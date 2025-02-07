@@ -45,7 +45,7 @@ class FirebaseNotificationService {
         title: String,
         body: String,
         type: String, // ✅ Notification type (e.g., "task", "update", "chat")
-        data: Map<String, String> = emptyMap() // ✅ Additional data if needed
+        data: Map<String, Any> = emptyMap() // ✅ Accept Any, but convert all values to Strings
     ) {
         val accessToken = getAccessToken()
 
@@ -59,7 +59,7 @@ class FirebaseNotificationService {
 
         val fcmUrl = "https://fcm.googleapis.com/v1/projects/$projectId/messages:send"
 
-        // ✅ Corrected JSON Formatting for `data`
+        // ✅ Corrected JSON Formatting for `data` (Convert all values to Strings)
         val payload = buildJsonObject {
             put("message", buildJsonObject {
                 put("token", token)
@@ -69,7 +69,7 @@ class FirebaseNotificationService {
                 })
                 put("data", buildJsonObject {
                     put("type", type)  // ✅ Example: "task", "update", "chat"
-                    data.forEach { (key, value) -> put(key, value) } // ✅ Proper key-value map
+                    data.forEach { (key, value) -> put(key, value.toString()) } // ✅ Convert everything to String
                 })
             })
         }
