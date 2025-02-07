@@ -1,6 +1,7 @@
 package com.example.repository
 
 import com.example.auth.FirebaseNotificationService
+import com.example.model.NotificationType
 
 class NotificationService(
     private val profileRepository: ProfileRepository,
@@ -15,10 +16,9 @@ class NotificationService(
         title: String,
         message: String,
         recipientId: String,
-        data: Map<String, String> = emptyMap(),
-        type: String
+        type: NotificationType
     ) {
-        sendNotificationToDevice(recipientId, title, message, data, type )
+        sendNotificationToDevice(recipientId, title, message, type )
     }
 
     /**
@@ -28,10 +28,9 @@ class NotificationService(
         title: String,
         message: String,
         recipientId: String,
-        data: Map<String, String> = emptyMap(),
-        type: String
+        type: NotificationType
     ) {
-        sendNotificationToDevice(recipientId, title, message, data, type )
+        sendNotificationToDevice(recipientId, title, message, type )
     }
 
     /**
@@ -41,8 +40,7 @@ class NotificationService(
         userId: String,
         title: String,
         message: String,
-        data: Map<String, String>,
-        type:String
+        type:NotificationType
     ) {
         val deviceToken = profileRepository.getDeviceToken(userId)
         if (deviceToken != null) {
@@ -50,7 +48,6 @@ class NotificationService(
                 token = deviceToken,
                 title = title,
                 body = message,
-                data = data,
                 type = type
             )
         }

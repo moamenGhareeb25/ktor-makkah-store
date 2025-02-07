@@ -7,6 +7,7 @@ import com.example.database.Messages
 import com.example.database.ProfileTable
 import com.example.model.Chat
 import com.example.model.Message
+import com.example.model.NotificationType
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.*
@@ -94,8 +95,7 @@ class ChatRepository(
                     token = deviceToken,
                     title = "New Message",
                     body = message.content,
-                    data = mapOf("chatId" to chatId, "senderId" to senderId),
-                    type = "chat"
+                    type = NotificationType.CHAT
                 )
             }
         }

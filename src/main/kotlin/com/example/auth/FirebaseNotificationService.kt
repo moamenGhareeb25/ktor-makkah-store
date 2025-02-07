@@ -1,5 +1,6 @@
 package com.example.auth
 
+import com.example.model.NotificationType
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.ServiceAccountCredentials
 import io.ktor.client.*
@@ -44,22 +45,18 @@ class FirebaseNotificationService {
         token: String,
         title: String,
         body: String,
-        type: String, // ✅ Notification type (e.g., "task", "update", "chat")
-        data: Map<String, Any> = emptyMap() // ✅ Accept Any, but convert all values to Strings
+        type: NotificationType // ✅ Now using enum
     ) {
         val accessToken = getAccessToken()
 
-        // Extract `project_id` from Firebase Config JSON
-        val firebaseBase64 = System.getenv("FIREBASE_CONFIG")
-            ?: throw IllegalStateException("❌ FIREBASE_CONFIG is not set!")
-
-        val firebaseConfigJson = String(Base64.getDecoder().decode(firebaseBase64)).trim()
+        // Extract project ID
+        val firebaseConfigJson = String(Base64.getDecoder().decode(System.getenv("FIREBASE_CONFIG") ?: ""))
         val projectId = Json.parseToJsonElement(firebaseConfigJson).jsonObject["project_id"]?.jsonPrimitive?.content
             ?: throw IllegalStateException("❌ Missing 'project_id' in Firebase Config!")
 
         val fcmUrl = "https://fcm.googleapis.com/v1/projects/$projectId/messages:send"
 
-        // ✅ Corrected JSON Formatting for `data` (Convert all values to Strings)
+        // ✅ Payload (Now using enum `type.value`)
         val payload = buildJsonObject {
             put("message", buildJsonObject {
                 put("token", token)
@@ -68,8 +65,7 @@ class FirebaseNotificationService {
                     put("body", body)
                 })
                 put("data", buildJsonObject {
-                    put("type", type)  // ✅ Example: "task", "update", "chat"
-                    data.forEach { (key, value) -> put(key, value.toString()) } // ✅ Convert everything to String
+                    put("type", type.value) // ✅ Ensures only valid values
                 })
             })
         }
@@ -78,7 +74,7 @@ class FirebaseNotificationService {
             val response: HttpResponse = client.post(fcmUrl) {
                 header(HttpHeaders.Authorization, "Bearer $accessToken")
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
-                setBody(Json.encodeToString(payload)) // ✅ Ensure correct JSON structure
+                setBody(Json.encodeToString(payload))
             }
 
             val responseBody = response.bodyAsText()

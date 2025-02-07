@@ -122,7 +122,7 @@ private fun Route.profileRoutes(
                 title = "New Profile Created",
                 message = "A new profile for ${profile.name} has been created by $requesterId.",
                 recipientId = authorizationService.getOwnerId(),
-                type = "create profile"
+                type = NotificationType.REQUEST
             )
             call.respond(HttpStatusCode.Created, "Profile created successfully.")
         }
@@ -670,9 +670,7 @@ private fun Route.notification(firebaseNotificationService: FirebaseNotification
             val token = request["token"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Token required")
             val title = request["title"] ?: "New Notification"
             val body = request["body"] ?: "You have a new update."
-            val sound = request["sound"] ?: "default_notification"
-            val targetScreen = request["targetScreen"] ?: "MainActivity"
-            val showDialog = request["showDialog"]?.toBoolean() ?: false
+            val type = NotificationType.NOTIFICATION
 
             // Convert `data` safely
             val data = try {
@@ -681,7 +679,7 @@ private fun Route.notification(firebaseNotificationService: FirebaseNotification
                 emptyMap()
             }
 
-            firebaseNotificationService.sendNotification(token, title, body, sound)
+            firebaseNotificationService.sendNotification(token, title, body, type )
 
             call.respond(HttpStatusCode.OK, "Notification sent successfully")
         }
