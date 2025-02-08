@@ -14,7 +14,7 @@ RUN ./gradlew shadowJar --no-daemon
 # Final Stage
 FROM eclipse-temurin:17-jdk-jammy
 # Builder Stage
-FROM openjdk:17-jdk-slim AS builder
+FROM eclipse-temurin:17-jdk-jammy AS runtime-stage
 
 WORKDIR /app
 
