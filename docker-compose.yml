@@ -1,6 +1,5 @@
 
 services:
-  # PostgreSQL Database
   db:
     image: postgres:13
     container_name: ktor_db
@@ -13,7 +12,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # Ktor Application
   app:
     build:
       context: .
@@ -22,15 +20,14 @@ services:
     ports:
       - "8080:8080"
     environment:
-        DATABASE_URL: jdbc:postgresql://db:5432/ktor_dkwc
-        DATABASE_USER: ktor_dkwc_user
-        DATABASE_PASSWORD: xPnzorWy9NzjuPeSYSOFOh7fsiSQ9q7f
-        FIREBASE_CONFIG: ${FIREBASE_CONFIG}
+      DATABASE_URL: jdbc:postgresql://db:5432/ktor_dkwc
+      DATABASE_USER: ktor_dkwc_user
+      DATABASE_PASSWORD: xPnzorWy9NzjuPeSYSOFOh7fsiSQ9q7f
+      FIREBASE_CONFIG: ${FIREBASE_SERVICE_ACCOUNT_PATH}
     volumes:
       - ./firebase-key.json:/app/firebase-key.json
     depends_on:
       - db
 
-# Volumes
 volumes:
   postgres_data:

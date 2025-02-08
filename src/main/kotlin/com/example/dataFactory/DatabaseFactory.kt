@@ -4,16 +4,19 @@ import com.example.database.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
+import io.github.cdimascio.dotenv.dotenv
+
 
 object DatabaseFactory {
     fun init() {
         try {
-            val databaseUrl = System.getenv("DATABASE_URL")
-                ?: throw IllegalStateException("DATABASE_URL not set")
-            val databaseUser = System.getenv("DATABASE_USER")
-                ?: throw IllegalStateException("DATABASE_USER not set")
-            val databasePassword = System.getenv("DATABASE_PASSWORD")
-                ?: throw IllegalStateException("DATABASE_PASSWORD not set")
+            val dotenv = dotenv()
+            val databaseUrl = dotenv["DATABASE_URL_neon"]
+                ?: throw IllegalStateException("DATABASE_URL_neon not set")
+            val databaseUser = dotenv["DATABASE_USER_neon"]
+                ?: throw IllegalStateException("DATABASE_USER_neon not set")
+            val databasePassword = dotenv["DATABASE_PASSWORD_neon"]
+                ?: throw IllegalStateException("DATABASE_PASSWORD_neon not set")
 
             Database.connect(
                 url = databaseUrl,
