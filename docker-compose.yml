@@ -23,7 +23,7 @@ services:
       DATABASE_URL: jdbc:postgresql://db:5432/ktor_dkwc
       DATABASE_USER: ktor_dkwc_user
       DATABASE_PASSWORD: xPnzorWy9NzjuPeSYSOFOh7fsiSQ9q7f
-      FIREBASE_CONFIG: ${FIREBASE_SERVICE_ACCOUNT_PATH}
+      FIREBASE_CONFIG: ${FIREBASE_CONFIG}
     volumes:
       - ./firebase-key.json:/app/firebase-key.json
     depends_on:
