@@ -4,30 +4,32 @@ import com.example.database.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
-import io.github.cdimascio.dotenv.dotenv
-
+import java.net.URI
 
 object DatabaseFactory {
     fun init() {
         try {
-            val dotenv = dotenv()
-            val databaseUrl = dotenv["DATABASE_URL_neon"]
-                ?: throw IllegalStateException("DATABASE_URL_neon not set")
-            val databaseUser = dotenv["DATABASE_USER_neon"]
-                ?: throw IllegalStateException("DATABASE_USER_neon not set")
-            val databasePassword = dotenv["DATABASE_PASSWORD_neon"]
-                ?: throw IllegalStateException("DATABASE_PASSWORD_neon not set")
+            // 🔹 Get the full NeonDB connection string from one env variable
+            val databaseUrl = System.getenv("DATABASE_NEON_URL")
+                ?: throw IllegalStateException("❌ DATABASE_NEON_URL not set!")
+
+            // 🔹 Parse the URL to extract user, password, host, and database name
+            val uri = URI(databaseUrl)
+            val userInfo = uri.userInfo.split(":")
+            val databaseUser = userInfo[0]
+            val databasePassword = userInfo[1]
+            val jdbcUrl = "jdbc:postgresql://${uri.host}${uri.path}?sslmode=require"
 
             Database.connect(
-                url = databaseUrl,
+                url = jdbcUrl,
+                driver = "org.postgresql.Driver",
                 user = databaseUser,
-                password = databasePassword,
-                driver = "org.postgresql.Driver"
+                password = databasePassword
             )
 
-            // Create all tables
+            // 🔹 Use createMissingTablesAndColumns() to avoid overwriting tables
             transaction {
-                SchemaUtils.create(
+                SchemaUtils.createMissingTablesAndColumns(
                     ProfileTable,
                     Chats,
                     ChatParticipants,
@@ -37,10 +39,10 @@ object DatabaseFactory {
                 )
             }
 
-            println("Database initialized successfully!")
+            println("✅ Database connected successfully!")
         } catch (e: Exception) {
+            println("❌ Error initializing database: ${e.message}")
             e.printStackTrace()
-            println("Error initializing database: ${e.message}")
         }
     }
 }
